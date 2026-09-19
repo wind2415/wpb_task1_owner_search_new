@@ -46,6 +46,15 @@ clear_costmaps_timeout: 5.0
 face_verify_enabled: true
 face_verify_required: true
 allow_unverified_owner: false
+owner_enrollment_enabled: false
+owner_enrollment_name_timeout: 15.0
+owner_enrollment_confirm_timeout: 8.0
+owner_enrollment_capture_seconds: 5.0
+owner_enrollment_sample_interval: 0.35
+owner_enrollment_min_samples: 6
+owner_enrollment_min_face_size: 70
+owner_enrollment_retries: 3
+owner_enrollment_asr_settle_seconds: 0.8
 face_auto_download: false
 face_model_name: buffalo_sc
 face_model_root: /home/ubuntu20/.insightface
@@ -101,40 +110,74 @@ center_owner_angular_gain: 0.65
 center_owner_max_angular_speed: 0.30
 center_owner_lost_turn_speed: 0.10
 
-# Owner action recognition. Keep this on CPU so YOLO-World can own cuda:0.
-# The node samples the robot Kinect camera for 7s, using the verified owner's
-# ROI when available, then speaks the final action.
+# Owner action recognition. YOLO-Pose gets the first decision on dynamic
+# waving/fall-transition actions. If it does not find either dynamic action,
+# Qwen vision runs through the local Ollama service for sitting, lying, and
+# already-fallen action recognition, with the existing point-cloud support
+# analysis retained.
 action_recognition_enabled: true
-action_model_path: /home/ubuntu20/catkin_ws/src/wpr_simulation/models/vision/yolo11n-pose.pt
+action_core_path: /home/ubuntu20/catkin_ws/src/offline_voice_bridge/scripts/qwen_action_recognition_node.py
+action_llm_url: http://127.0.0.1:11434/api/chat
+action_llm_model: qwen3.5:0.8b
+action_llm_timeout: 45.0
+action_llm_keep_alive: 30m
+action_llm_max_tokens: 20
+action_llm_num_ctx: 4096
+# Keep the small Qwen vision request on CPU so the long-running YOLO-World
+# process retains the GPU and does not compete for VRAM after action analysis.
+action_llm_num_gpu: 0
+action_model_path: /home/ubuntu20/catkin_ws/src/wpr_task1_owner_search/models/pose/yolo11n-pose.pt
 action_device: cpu
 action_require_gpu: false
 action_imgsz: 416
-action_conf: 0.30
+action_conf: 0.25
 action_iou: 0.45
 action_half: false
-action_sample_seconds: 7.0
+action_sample_seconds: 5.0
 action_sample_rate: 3.0
+action_frame_count: 9
+action_llm_frame_count: 3
+action_jpeg_quality: 65
+action_image_max_width: 320
+action_warmup_retries: 3
+action_warmup_retry_delay: 2.0
+action_warmup_wait_timeout: 30.0
+action_pose_enabled: true
+action_pointcloud_enabled: true
+action_pointcloud_camera_height: 0.85
+action_pointcloud_ground_height_limit: 0.35
+action_pointcloud_furniture_height_limit: 0.42
+action_pointcloud_max_age: 1.0
+action_pointcloud_stride: 8
+action_pointcloud_min_samples: 30
+action_pointcloud_roi_padding: 0.20
+action_pointcloud_anchor_radius: 14.0
+action_pointcloud_depth_percentile: 20.0
+action_pointcloud_surface_band: 0.25
+action_pointcloud_local_ground_padding: 0.85
+action_pointcloud_elevated_delta: 0.24
+action_pointcloud_frame_mode: auto
 action_min_keypoint_conf: 0.25
 action_max_det: 4
-action_pause_yolo: false
-action_use_owner_roi: true
-action_roi_padding: 0.35
+action_pause_yolo: true
+action_yolo_pause_settle_seconds: 0.35
+action_use_owner_roi: false
+action_roi_padding: 0.55
 action_min_pose_samples: 5
 action_static_required_ratio: 0.65
-# Sitting recognition helpers. These keep the old bent-knee rule, but also let
-# one-sided knee/hip evidence, horizontal thighs, folded ankles, and a compact
-# seated body box recover frames where YOLO-pose misses one leg keypoint.
+# The following pose-helper parameters are retained for compatibility with
+# existing parameter files. The active pose helper is the validated one from
+# offline_voice_bridge and uses its own thresholds.
 action_sitting_min_torso_verticality: 0.45
 action_sitting_knee_angle_max: 150.0
 action_sitting_knee_hip_y_ratio: 0.45
 action_sitting_ankle_hip_y_ratio: 0.62
 action_sitting_thigh_horizontal_ratio: 0.65
-action_sitting_compact_aspect_min: 0.55
-action_sitting_support_score: 0.75
-action_sitting_relaxed_ratio: 0.50
-# Fall detection thresholds. The early-frame guards keep a static lying owner
-# from being treated as a fall unless the clip clearly starts upright and then
-# gains multiple falling-transition signals.
+action_sitting_compact_aspect_min: 0.65
+action_sitting_support_score: 0.90
+action_sitting_relaxed_ratio: 0.60
+# Retained legacy action parameters; active dynamic fall-transition logic comes
+# from the validated YOLO-Pose helper in the Qwen action core.
 action_fall_center_drop: 0.06
 action_fall_torso_drop: 0.20
 action_fall_aspect_gain: 0.25
@@ -147,9 +190,10 @@ action_fall_static_lie_ratio: 0.65
 action_fall_early_det_aspect_max: 1.10
 action_fall_static_det_aspect_min: 1.20
 action_fall_min_transition_signals: 2
+# Kept for compatibility with older parameter files. Surface classification is
+# now performed by the static-action Qwen/point-cloud path after the dynamic
+# YOLO-Pose gate.
 already_fallen_surface_labels: [lying, unknown]
-# Static lying classification. If there is no fall transition, use Kinect point
-# cloud surface height to split lying on the floor from lying on sofa/bed/chair.
 lying_surface_classification_enabled: true
 lying_surface_camera_height: 0.85
 lying_ground_max_surface_height: 0.35
@@ -157,7 +201,7 @@ lying_furniture_min_surface_height: 0.42
 lying_ground_bbox_bottom_ratio: 0.88
 lying_ground_bbox_center_ratio: 0.62
 action_report_standing: false
-action_speech_hold: 3.2
+action_speech_hold: 1.2
 
 # Real robot response after a waving owner is detected. This samples the Kinect
 # organized point cloud inside the verified owner's 2D bbox and uses lidar only
@@ -249,7 +293,7 @@ waving_help_pause_seconds: 3.0
 # camera detections while moving. This avoids losing the owner when the target
 # leaves the camera and still lets local costmaps avoid obstacles.
 fall_approach_enabled: true
-fall_approach_action_labels: [falling, lying_ground, lying, sitting]
+fall_approach_action_labels: [sudden_fall, fallen, falling, lying_ground, lying, sitting]
 fall_approach_position_sample_seconds: 0.9
 fall_approach_min_position_samples: 2
 fall_approach_standoff_distance: 0.75
@@ -269,14 +313,13 @@ fall_approach_extra_close_speed: 0.08
 fall_approach_extra_close_timeout: 4.0
 fall_approach_extra_close_finish_tolerance: 0.06
 
-# Arm motion after reaching a fallen owner. Sitting and elevated static lying do
-# not use this; static lying only uses this when the point cloud classifies the
-# owner as lying on the floor, not on sofa/bed/chair.
+# Arm motion after reaching a fallen owner. The new `fallen` and `sudden_fall`
+# labels are mapped into this existing safety behavior.
 # Uses the same
 # /wpb_home/mani_ctrl JointState interface as wpb_home_python3/scripts/mani_ctrl.py:
 # name=['lift','gripper'], position[0]=lift height, position[1]=gripper gap.
 fall_assist_arm_enabled: true
-fall_assist_arm_action_labels: [falling, lying_ground]
+fall_assist_arm_action_labels: [sudden_fall, fallen, falling, lying_ground]
 mani_ctrl_topic: /wpb_home/mani_ctrl
 fall_assist_arm_extend_lift: 0.50
 fall_assist_arm_extend_gripper: 0.12
@@ -336,9 +379,9 @@ electrical_switch_preload_wait_before_prompt: true
 electrical_switch_preload_wait_timeout: 20.0
 electrical_switch_ollama_url: http://127.0.0.1:11434/api/chat
 electrical_switch_ollama_enabled: true
-electrical_switch_ollama_model: qwen3.5:2b
+electrical_switch_ollama_model: qwen3.5:0.8b
 electrical_switch_ollama_autoselect_model: true
-electrical_switch_ollama_model_fallbacks: [qwen3:1.7b, qwen2.5:3b, qwen2.5:1.5b]
+electrical_switch_ollama_model_fallbacks: [qwen3:0.6b, qwen2.5:0.5b]
 electrical_switch_ollama_tags_timeout: 2.0
 electrical_switch_ollama_num_gpu: 0
 electrical_switch_ollama_timeout: 6.0

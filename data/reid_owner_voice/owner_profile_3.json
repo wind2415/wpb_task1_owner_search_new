@@ -1,0 +1,164 @@
+{
+  "created_at": "2026-09-17 17:59:46",
+  "backend": "torchreid",
+  "model_name": "osnet_x0_25",
+  "model_path": "",
+  "device": "cpu",
+  "match_threshold": 0.7,
+  "lying_pose_enhancement": true,
+  "lying_match_threshold": 0.6,
+  "lying_min_reid_score": 0.5,
+  "lying_required_consecutive": 3,
+  "has_color_embedding": true,
+  "samples": [
+    {
+      "index": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639184909.jpg",
+      "bbox": [
+        403,
+        17,
+        583,
+        539
+      ],
+      "crop_bbox": [
+        389,
+        0,
+        597,
+        539
+      ],
+      "det_score": 0.9415450692176819,
+      "area_ratio": 0.18125
+    },
+    {
+      "index": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639185206.jpg",
+      "bbox": [
+        404,
+        17,
+        584,
+        539
+      ],
+      "crop_bbox": [
+        390,
+        0,
+        598,
+        539
+      ],
+      "det_score": 0.9344613552093506,
+      "area_ratio": 0.18125
+    },
+    {
+      "index": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639185509.jpg",
+      "bbox": [
+        404,
+        17,
+        583,
+        539
+      ],
+      "crop_bbox": [
+        390,
+        0,
+        597,
+        539
+      ],
+      "det_score": 0.9273864030838013,
+      "area_ratio": 0.18024305555555556
+    },
+    {
+      "index": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639185826.jpg",
+      "bbox": [
+        404,
+        17,
+        582,
+        539
+      ],
+      "crop_bbox": [
+        390,
+        0,
+        596,
+        539
+      ],
+      "det_score": 0.9236202239990234,
+      "area_ratio": 0.17923611111111112
+    },
+    {
+      "index": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639186156.jpg",
+      "bbox": [
+        404,
+        17,
+        581,
+        539
+      ],
+      "crop_bbox": [
+        390,
+        0,
+        595,
+        539
+      ],
+      "det_score": 0.9219186902046204,
+      "area_ratio": 0.17822916666666666
+    },
+    {
+      "index": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639186480.jpg",
+      "bbox": [
+        401,
+        17,
+        582,
+        539
+      ],
+      "crop_bbox": [
+        387,
+        0,
+        596,
+        539
+      ],
+      "det_score": 0.9290845990180969,
+      "area_ratio": 0.18225694444444446
+    }
+  ],
+  "has_face_embedding": true,
+  "face_samples": [
+    {
+      "sample": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639184909.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639185206.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639185509.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639185826.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639186156.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639186480.jpg",
+      "region": "upper",
+      "face_count": 1
+    }
+  ],
+  "owner_index": 3,
+  "owner_name": "龙语祥"
+}

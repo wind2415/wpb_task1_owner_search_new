@@ -29,6 +29,7 @@
   <exec_depend>move_base</exec_depend>
   <exec_depend>offline_voice_bridge</exec_depend>
   <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>roslaunch</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>
   <exec_depend>rviz</exec_depend>
   <exec_depend>sound_play</exec_depend>

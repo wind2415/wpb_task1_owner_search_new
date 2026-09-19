@@ -1,0 +1,164 @@
+{
+  "created_at": "2026-09-17 17:59:22",
+  "backend": "torchreid",
+  "model_name": "osnet_x0_25",
+  "model_path": "",
+  "device": "cpu",
+  "match_threshold": 0.7,
+  "lying_pose_enhancement": true,
+  "lying_match_threshold": 0.6,
+  "lying_min_reid_score": 0.5,
+  "lying_required_consecutive": 3,
+  "has_color_embedding": true,
+  "samples": [
+    {
+      "index": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639160750.jpg",
+      "bbox": [
+        433,
+        0,
+        626,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        641,
+        539
+      ],
+      "det_score": 0.9349690675735474,
+      "area_ratio": 0.20066936728395063
+    },
+    {
+      "index": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639161047.jpg",
+      "bbox": [
+        433,
+        0,
+        625,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        640,
+        539
+      ],
+      "det_score": 0.9338667988777161,
+      "area_ratio": 0.19962962962962963
+    },
+    {
+      "index": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639161351.jpg",
+      "bbox": [
+        433,
+        0,
+        625,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        640,
+        539
+      ],
+      "det_score": 0.9347314238548279,
+      "area_ratio": 0.19962962962962963
+    },
+    {
+      "index": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639161647.jpg",
+      "bbox": [
+        433,
+        0,
+        625,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        640,
+        539
+      ],
+      "det_score": 0.9339619278907776,
+      "area_ratio": 0.19962962962962963
+    },
+    {
+      "index": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639161958.jpg",
+      "bbox": [
+        433,
+        0,
+        624,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        639,
+        539
+      ],
+      "det_score": 0.9331268668174744,
+      "area_ratio": 0.19858989197530863
+    },
+    {
+      "index": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639162275.jpg",
+      "bbox": [
+        433,
+        0,
+        624,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        639,
+        539
+      ],
+      "det_score": 0.9349931478500366,
+      "area_ratio": 0.19858989197530863
+    }
+  ],
+  "has_face_embedding": true,
+  "face_samples": [
+    {
+      "sample": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639160750.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639161047.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639161351.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639161647.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639161958.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639162275.jpg",
+      "region": "upper",
+      "face_count": 1
+    }
+  ],
+  "owner_index": 2,
+  "owner_name": "张博瑞"
+}

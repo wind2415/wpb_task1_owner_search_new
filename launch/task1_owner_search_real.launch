@@ -3,14 +3,21 @@
   <arg name="start_yolo" default="true" />
   <arg name="show_yolo_viewer" default="true" />
   <arg name="yolo_output" default="log" />
+  <arg name="yolo_respawn" default="true" />
+  <arg name="yolo_respawn_delay" default="2.0" />
+  <arg name="viewer_respawn" default="true" />
   <arg name="start_voice" default="true" />
   <arg name="start_asr" default="false" />
   <arg name="start_tts" default="true" />
   <arg name="start_sound_play" default="true" />
-  <!-- Match the wpb_home voice stack: use the ALSA default capture device,
-       and override only if the robot's card routing differs. -->
+  <!-- PulseAudio owns the Xbox capture device on this robot. Use the shared
+       default PCM instead of opening the ALSA device exclusively. -->
   <arg name="asr_capture_device" default="default" />
-  <arg name="asr_energy_threshold" default="200" />
+  <arg name="asr_capture_backend" default="pulse" />
+  <arg name="asr_capture_source" default="" />
+  <arg name="asr_capture_volume" default="150%" />
+  <arg name="asr_capture_gain" default="2.0" />
+  <arg name="asr_energy_threshold" default="80" />
   <arg name="start_task" default="true" />
   <arg name="start_rviz" default="true" />
 
@@ -37,8 +44,29 @@
   <arg name="detections_topic" default="/perception/person_detections_2d" />
   <arg name="points_topic" default="/kinect2/qhd/points" />
   <arg name="yolo_debug_image_topic" default="/perception/yoloworld/debug_image" />
+  <arg name="yolo_imgsz" default="384" />
+  <arg name="yolo_process_every_n" default="3" />
+  <arg name="yolo_warmup" default="true" />
+  <arg name="yolo_publish_debug" default="false" />
+  <arg name="yolo_display_fps" default="15.0" />
+  <arg name="yolo_viewer_window_retry_seconds" default="2.0" />
   <arg name="owner_image_path" default="$(find wpb_task1_owner_search)/data/owner" />
+  <arg name="owner_enrollment_enabled" default="false" />
+  <arg name="owner_enrollment_capture_seconds" default="5.0" />
+  <arg name="owner_enrollment_min_samples" default="6" />
   <arg name="device" default="cuda:0" />
+  <arg name="action_llm_url" default="http://127.0.0.1:11434/api/chat" />
+  <arg name="action_llm_model" default="qwen3.5:0.8b" />
+  <arg name="action_sample_seconds" default="5.0" />
+  <arg name="action_frame_count" default="9" />
+  <arg name="action_llm_frame_count" default="3" />
+  <arg name="action_llm_num_ctx" default="4096" />
+  <arg name="action_llm_num_gpu" default="0" />
+  <arg name="action_image_max_width" default="320" />
+  <arg name="action_pause_yolo" default="true" />
+  <arg name="action_yolo_pause_settle_seconds" default="0.35" />
+  <arg name="action_use_owner_roi" default="false" />
+  <arg name="action_speech_hold" default="1.2" />
 
   <!-- Keep ASR tuning visible before the voice launch loads its nodes. -->
   <param name="/asr/capture_device" value="$(arg asr_capture_device)" />
@@ -63,29 +91,37 @@
   </group>
 
   <group if="$(arg start_yolo)">
-    <node pkg="yoloworld_perception" type="yoloworld_node.py" name="yoloworld" output="$(arg yolo_output)">
+    <node pkg="wpb_task1_owner_search" type="yoloworld_async.py" name="yoloworld"
+          output="$(arg yolo_output)" respawn="$(arg yolo_respawn)"
+          respawn_delay="$(arg yolo_respawn_delay)">
       <env name="PYTORCH_CUDA_ALLOC_CONF" value="expandable_segments:True" />
       <param name="image_topic" value="$(arg image_topic)" />
       <param name="model_path" value="$(find yoloworld_perception)/models/yolov8s-world-person.pt" />
       <param name="device" value="$(arg device)" />
       <param name="require_gpu" value="true" />
-      <param name="imgsz" value="416" />
+      <param name="imgsz" value="$(arg yolo_imgsz)" />
       <param name="conf" value="0.30" />
       <param name="iou" value="0.45" />
       <param name="max_det" value="5" />
-      <param name="process_every_n" value="2" />
+      <param name="process_every_n" value="$(arg yolo_process_every_n)" />
       <param name="classes" value="person" />
-      <param name="publish_debug" value="true" />
+      <param name="warmup" value="$(arg yolo_warmup)" />
+      <param name="publish_debug" value="$(arg yolo_publish_debug)" />
       <remap from="~detections" to="$(arg detections_topic)" />
       <remap from="~debug_image" to="$(arg yolo_debug_image_topic)" />
     </node>
   </group>
 
-  <node if="$(arg show_yolo_viewer)" pkg="yoloworld_perception" type="yoloworld_debug_viewer.py" name="yoloworld_bbox_debug_viewer" output="$(arg yolo_output)">
+  <node if="$(arg show_yolo_viewer)" pkg="wpb_task1_owner_search"
+        type="yoloworld_debug_viewer_stable.py" name="yoloworld_bbox_debug_viewer"
+        output="$(arg yolo_output)" respawn="$(arg viewer_respawn)"
+        respawn_delay="$(arg yolo_respawn_delay)">
     <param name="image_topic" value="$(arg image_topic)" />
-    <param name="debug_image_topic" value="$(arg yolo_debug_image_topic)" />
+    <param name="detections_topic" value="$(arg detections_topic)" />
     <param name="show_raw" value="false" />
     <param name="show_debug" value="true" />
+    <param name="display_fps" value="$(arg yolo_display_fps)" />
+    <param name="window_retry_seconds" value="$(arg yolo_viewer_window_retry_seconds)" />
     <param name="debug_window" value="Owner YOLO-Person Box Real" />
   </node>
 
@@ -97,6 +133,10 @@
       <arg name="start_tts" value="$(arg start_tts)" />
       <arg name="start_sound_play" value="$(arg start_sound_play)" />
       <arg name="asr_capture_device" value="$(arg asr_capture_device)" />
+      <arg name="asr_capture_backend" value="$(arg asr_capture_backend)" />
+      <arg name="asr_capture_source" value="$(arg asr_capture_source)" />
+      <arg name="asr_capture_volume" value="$(arg asr_capture_volume)" />
+      <arg name="asr_capture_gain" value="$(arg asr_capture_gain)" />
       <arg name="asr_energy_threshold" value="$(arg asr_energy_threshold)" />
     </include>
   </group>
@@ -108,11 +148,26 @@
     <param name="detections_topic" value="$(arg detections_topic)" />
     <param name="points_topic" value="$(arg points_topic)" />
     <param name="owner_image_path" value="$(arg owner_image_path)" />
+    <param name="owner_enrollment_enabled" value="$(arg owner_enrollment_enabled)" />
+    <param name="owner_enrollment_capture_seconds" value="$(arg owner_enrollment_capture_seconds)" />
+    <param name="owner_enrollment_min_samples" value="$(arg owner_enrollment_min_samples)" />
     <param name="waypoint_file" value="$(arg waypoint_file)" />
     <param name="waypoint_name" value="$(arg waypoint_name)" />
     <param name="task_waypoint_names" value="$(arg task_waypoint_names)" />
     <param name="exit_waypoint_name" value="$(arg exit_waypoint_name)" />
     <param name="exit_waypoint_aliases" value="$(arg exit_waypoint_aliases)" />
     <param name="navigate_enabled" value="$(arg navigate_enabled)" />
+    <param name="action_llm_url" value="$(arg action_llm_url)" />
+    <param name="action_llm_model" value="$(arg action_llm_model)" />
+    <param name="action_sample_seconds" value="$(arg action_sample_seconds)" />
+    <param name="action_frame_count" value="$(arg action_frame_count)" />
+    <param name="action_llm_frame_count" value="$(arg action_llm_frame_count)" />
+    <param name="action_llm_num_ctx" value="$(arg action_llm_num_ctx)" />
+    <param name="action_llm_num_gpu" value="$(arg action_llm_num_gpu)" />
+    <param name="action_image_max_width" value="$(arg action_image_max_width)" />
+    <param name="action_pause_yolo" value="$(arg action_pause_yolo)" />
+    <param name="action_yolo_pause_settle_seconds" value="$(arg action_yolo_pause_settle_seconds)" />
+    <param name="action_use_owner_roi" value="$(arg action_use_owner_roi)" />
+    <param name="action_speech_hold" value="$(arg action_speech_hold)" />
   </node>
 </launch>

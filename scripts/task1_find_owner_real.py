@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # coding: utf-8
+import base64
+import importlib.util
 import math
 import audioop
 import json
 import os
 import re
+import socket
 import struct
 import subprocess
 import sys
@@ -36,6 +39,9 @@ from std_msgs.msg import Bool, String
 from std_srvs.srv import Empty
 
 
+DEFAULT_QWEN_MODEL = "qwen3.5:0.8b"
+
+
 def clamp(value, low, high):
     return max(low, min(high, value))
 
@@ -48,6 +54,37 @@ def yaw_from_quaternion(q):
 
 def signed_angle_diff(target, current):
     return math.atan2(math.sin(target - current), math.cos(target - current))
+
+
+def load_qwen_action_core(configured_path=""):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = []
+    if configured_path:
+        candidates.append(os.path.expanduser(str(configured_path)))
+    candidates.extend(
+        [
+            os.path.join(
+                script_dir,
+                "..",
+                "..",
+                "offline_voice_bridge",
+                "scripts",
+                "qwen_action_recognition_node.py",
+            ),
+            "/home/ubuntu20/catkin_ws/src/offline_voice_bridge/scripts/qwen_action_recognition_node.py",
+        ]
+    )
+    core_path = next((os.path.abspath(path) for path in candidates if os.path.exists(path)), "")
+    if not core_path:
+        raise RuntimeError("verified Qwen action core not found")
+
+    module_name = "offline_voice_bridge_qwen_action_core"
+    spec = importlib.util.spec_from_file_location(module_name, core_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load Qwen action core: %s" % core_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module, core_path
 
 
 class MissingHardwareError(RuntimeError):
@@ -124,6 +161,31 @@ class RealOwnerSearchBeforeAction:
         self.face_verify_enabled = bool(rospy.get_param("~face_verify_enabled", True))
         self.face_verify_required = bool(rospy.get_param("~face_verify_required", True))
         self.allow_unverified_owner = bool(rospy.get_param("~allow_unverified_owner", False))
+        self.owner_enrollment_enabled = bool(rospy.get_param("~owner_enrollment_enabled", False))
+        self.owner_enrollment_name_timeout = max(
+            1.0, float(rospy.get_param("~owner_enrollment_name_timeout", 15.0))
+        )
+        self.owner_enrollment_confirm_timeout = max(
+            1.0, float(rospy.get_param("~owner_enrollment_confirm_timeout", 8.0))
+        )
+        self.owner_enrollment_capture_seconds = max(
+            1.0, float(rospy.get_param("~owner_enrollment_capture_seconds", 5.0))
+        )
+        self.owner_enrollment_sample_interval = max(
+            0.1, float(rospy.get_param("~owner_enrollment_sample_interval", 0.35))
+        )
+        self.owner_enrollment_min_samples = max(
+            1, int(rospy.get_param("~owner_enrollment_min_samples", 6))
+        )
+        self.owner_enrollment_min_face_size = max(
+            20, int(rospy.get_param("~owner_enrollment_min_face_size", 70))
+        )
+        self.owner_enrollment_retries = max(
+            1, int(rospy.get_param("~owner_enrollment_retries", 3))
+        )
+        self.owner_enrollment_asr_settle_seconds = max(
+            0.0, float(rospy.get_param("~owner_enrollment_asr_settle_seconds", 0.8))
+        )
         self.face_auto_download = bool(rospy.get_param("~face_auto_download", False))
         self.face_model_name = rospy.get_param("~face_model_name", "buffalo_sc")
         self.face_model_root = os.path.expanduser(rospy.get_param("~face_model_root", "~/.insightface"))
@@ -175,19 +237,93 @@ class RealOwnerSearchBeforeAction:
 
         self.action_recognition_enabled = bool(rospy.get_param("~action_recognition_enabled", True))
         self.action_model_path = os.path.expanduser(rospy.get_param("~action_model_path", ""))
+        self.action_core_path = rospy.get_param("~action_core_path", "")
+        self.action_llm_url = rospy.get_param(
+            "~action_llm_url", "http://127.0.0.1:11434/api/chat"
+        )
+        self.action_llm_model = str(
+            rospy.get_param("~action_llm_model", DEFAULT_QWEN_MODEL)
+        ).strip() or DEFAULT_QWEN_MODEL
+        self.action_llm_timeout = float(rospy.get_param("~action_llm_timeout", 45.0))
+        self.action_llm_keep_alive = rospy.get_param("~action_llm_keep_alive", "30m")
+        self.action_llm_max_tokens = int(rospy.get_param("~action_llm_max_tokens", 20))
+        self.action_llm_num_ctx = int(rospy.get_param("~action_llm_num_ctx", 4096))
+        self.action_llm_num_gpu = max(
+            0, int(rospy.get_param("~action_llm_num_gpu", 0))
+        )
         self.action_device = rospy.get_param("~action_device", "cuda:0")
         self.action_require_gpu = bool(rospy.get_param("~action_require_gpu", True))
         self.action_imgsz = int(rospy.get_param("~action_imgsz", 416))
-        self.action_conf = float(rospy.get_param("~action_conf", 0.30))
+        self.action_conf = float(rospy.get_param("~action_conf", 0.25))
         self.action_iou = float(rospy.get_param("~action_iou", 0.45))
         self.action_half = bool(rospy.get_param("~action_half", True))
-        self.action_sample_seconds = float(rospy.get_param("~action_sample_seconds", 7.0))
+        self.action_sample_seconds = float(rospy.get_param("~action_sample_seconds", 5.0))
         self.action_sample_rate = float(rospy.get_param("~action_sample_rate", 3.0))
+        self.action_frame_count = max(1, int(rospy.get_param("~action_frame_count", 9)))
+        self.action_llm_frame_count = max(
+            1, int(rospy.get_param("~action_llm_frame_count", 3))
+        )
+        self.action_jpeg_quality = int(rospy.get_param("~action_jpeg_quality", 65))
+        self.action_image_max_width = int(rospy.get_param("~action_image_max_width", 320))
+        self.action_warmup_retries = max(1, int(rospy.get_param("~action_warmup_retries", 3)))
+        self.action_warmup_retry_delay = max(
+            0.0, float(rospy.get_param("~action_warmup_retry_delay", 2.0))
+        )
+        self.action_warmup_wait_timeout = max(
+            0.0, float(rospy.get_param("~action_warmup_wait_timeout", 30.0))
+        )
+        self.action_pose_enabled = bool(rospy.get_param("~action_pose_enabled", True))
+        self.action_pointcloud_enabled = bool(
+            rospy.get_param("~action_pointcloud_enabled", True)
+        )
+        self.action_pointcloud_camera_height = float(
+            rospy.get_param("~action_pointcloud_camera_height", 0.85)
+        )
+        self.action_pointcloud_ground_height_limit = float(
+            rospy.get_param("~action_pointcloud_ground_height_limit", 0.35)
+        )
+        self.action_pointcloud_furniture_height_limit = float(
+            rospy.get_param("~action_pointcloud_furniture_height_limit", 0.42)
+        )
+        self.action_pointcloud_max_age = max(
+            0.1, float(rospy.get_param("~action_pointcloud_max_age", 1.0))
+        )
+        self.action_pointcloud_stride = max(
+            1, int(rospy.get_param("~action_pointcloud_stride", 8))
+        )
+        self.action_pointcloud_min_samples = max(
+            8, int(rospy.get_param("~action_pointcloud_min_samples", 30))
+        )
+        self.action_pointcloud_roi_padding = float(
+            rospy.get_param("~action_pointcloud_roi_padding", 0.20)
+        )
+        self.action_pointcloud_anchor_radius = float(
+            rospy.get_param("~action_pointcloud_anchor_radius", 14.0)
+        )
+        self.action_pointcloud_depth_percentile = float(
+            rospy.get_param("~action_pointcloud_depth_percentile", 20.0)
+        )
+        self.action_pointcloud_surface_band = float(
+            rospy.get_param("~action_pointcloud_surface_band", 0.25)
+        )
+        self.action_pointcloud_local_ground_padding = float(
+            rospy.get_param("~action_pointcloud_local_ground_padding", 0.85)
+        )
+        self.action_pointcloud_elevated_delta = float(
+            rospy.get_param("~action_pointcloud_elevated_delta", 0.24)
+        )
+        self.action_pointcloud_frame_mode = rospy.get_param(
+            "~action_pointcloud_frame_mode", "auto"
+        )
         self.action_min_keypoint_conf = float(rospy.get_param("~action_min_keypoint_conf", 0.25))
         self.action_max_det = int(rospy.get_param("~action_max_det", 4))
-        self.action_pause_yolo = bool(rospy.get_param("~action_pause_yolo", False))
-        self.action_use_owner_roi = bool(rospy.get_param("~action_use_owner_roi", True))
-        self.action_roi_padding = float(rospy.get_param("~action_roi_padding", 0.35))
+        self.action_pause_yolo = bool(rospy.get_param("~action_pause_yolo", True))
+        self.action_yolo_pause_settle_seconds = max(
+            0.0,
+            float(rospy.get_param("~action_yolo_pause_settle_seconds", 0.35)),
+        )
+        self.action_use_owner_roi = bool(rospy.get_param("~action_use_owner_roi", False))
+        self.action_roi_padding = float(rospy.get_param("~action_roi_padding", 0.55))
         self.action_min_pose_samples = int(rospy.get_param("~action_min_pose_samples", 5))
         self.action_static_required_ratio = float(rospy.get_param("~action_static_required_ratio", 0.65))
         self.action_sitting_min_torso_verticality = float(
@@ -200,10 +336,10 @@ class RealOwnerSearchBeforeAction:
             rospy.get_param("~action_sitting_thigh_horizontal_ratio", 0.65)
         )
         self.action_sitting_compact_aspect_min = float(
-            rospy.get_param("~action_sitting_compact_aspect_min", 0.55)
+            rospy.get_param("~action_sitting_compact_aspect_min", 0.65)
         )
-        self.action_sitting_support_score = float(rospy.get_param("~action_sitting_support_score", 0.75))
-        self.action_sitting_relaxed_ratio = float(rospy.get_param("~action_sitting_relaxed_ratio", 0.50))
+        self.action_sitting_support_score = float(rospy.get_param("~action_sitting_support_score", 0.90))
+        self.action_sitting_relaxed_ratio = float(rospy.get_param("~action_sitting_relaxed_ratio", 0.60))
         self.action_fall_center_drop = float(rospy.get_param("~action_fall_center_drop", 0.06))
         self.action_fall_torso_drop = float(rospy.get_param("~action_fall_torso_drop", 0.20))
         self.action_fall_aspect_gain = float(rospy.get_param("~action_fall_aspect_gain", 0.25))
@@ -231,7 +367,7 @@ class RealOwnerSearchBeforeAction:
         self.lying_ground_bbox_bottom_ratio = float(rospy.get_param("~lying_ground_bbox_bottom_ratio", 0.88))
         self.lying_ground_bbox_center_ratio = float(rospy.get_param("~lying_ground_bbox_center_ratio", 0.62))
         self.action_report_standing = bool(rospy.get_param("~action_report_standing", False))
-        self.action_speech_hold = float(rospy.get_param("~action_speech_hold", 3.2))
+        self.action_speech_hold = float(rospy.get_param("~action_speech_hold", 1.2))
 
         self.approach_on_waving_enabled = bool(rospy.get_param("~approach_on_waving_enabled", True))
         self.approach_timeout = float(rospy.get_param("~approach_timeout", 25.0))
@@ -374,7 +510,10 @@ class RealOwnerSearchBeforeAction:
 
         self.fall_approach_enabled = bool(rospy.get_param("~fall_approach_enabled", True))
         self.fall_approach_action_labels = self.parse_string_list(
-            rospy.get_param("~fall_approach_action_labels", ["falling", "lying_ground", "lying", "sitting"])
+            rospy.get_param(
+                "~fall_approach_action_labels",
+                ["sudden_fall", "fallen", "falling", "lying_ground", "lying", "sitting"],
+            )
         )
         self.fall_approach_position_sample_seconds = float(rospy.get_param("~fall_approach_position_sample_seconds", 0.9))
         self.fall_approach_min_position_samples = max(
@@ -406,7 +545,10 @@ class RealOwnerSearchBeforeAction:
 
         self.fall_assist_arm_enabled = bool(rospy.get_param("~fall_assist_arm_enabled", True))
         self.fall_assist_arm_action_labels = self.parse_string_list(
-            rospy.get_param("~fall_assist_arm_action_labels", ["falling", "lying_ground"])
+            rospy.get_param(
+                "~fall_assist_arm_action_labels",
+                ["sudden_fall", "fallen", "falling", "lying_ground"],
+            )
         )
         self.mani_ctrl_topic = rospy.get_param("~mani_ctrl_topic", "/wpb_home/mani_ctrl")
         self.fall_assist_arm_extend_lift = float(rospy.get_param("~fall_assist_arm_extend_lift", 0.50))
@@ -548,9 +690,9 @@ class RealOwnerSearchBeforeAction:
         self.electrical_switch_ollama_enabled = bool(
             rospy.get_param("~electrical_switch_ollama_enabled", True)
         )
-        self.electrical_switch_ollama_model = rospy.get_param(
-            "~electrical_switch_ollama_model", "qwen3.5:2b"
-        )
+        self.electrical_switch_ollama_model = str(
+            rospy.get_param("~electrical_switch_ollama_model", DEFAULT_QWEN_MODEL)
+        ).strip() or DEFAULT_QWEN_MODEL
         self.electrical_switch_ollama_autoselect_model = bool(
             rospy.get_param("~electrical_switch_ollama_autoselect_model", True)
         )
@@ -622,6 +764,7 @@ class RealOwnerSearchBeforeAction:
         self.electrical_switch_asr_ready = False
         self.electrical_switch_asr_lock = threading.Lock()
         self.electrical_switch_ollama_lock = threading.Lock()
+        self.ollama_request_lock = threading.Lock()
         self.electrical_switch_ollama_available = None
         self.electrical_switch_ollama_last_failure = 0.0
         self.electrical_switch_preload_done = threading.Event()
@@ -640,12 +783,22 @@ class RealOwnerSearchBeforeAction:
         self.say_after_publish_delay = float(rospy.get_param("~say_after_publish_delay", 1.0))
 
         self.owner_reference_images = []
+        self.owner_name = ""
         self.face_app = None
+        self.face_model_ready = False
         self.owner_face_embedding = None
         self.owner_face_embeddings = []
         self.face_ready = False
         self.action_pose_model = None
         self.action_ready = False
+        self.qwen_action_core = None
+        self.qwen_action_core_path = ""
+        self.qwen_pose_analyzer = None
+        self.qwen_pointcloud_analyzer = None
+        self.qwen_warmup_done = threading.Event()
+        self.qwen_warmup_error = ""
+        self.last_owner_action_place = "unknown"
+        self.last_owner_action_result = {}
 
         self.cmd_pub = rospy.Publisher(self.cmd_vel_topic, Twist, queue_size=1)
         self.say_pub = rospy.Publisher(self.say_topic, String, queue_size=5)
@@ -670,14 +823,18 @@ class RealOwnerSearchBeforeAction:
         self.waving_make_plan = rospy.ServiceProxy(self.waving_approach_plan_service, GetPlan)
 
         if self.face_verify_enabled:
-            self.owner_reference_images = self.load_owner_images()
+            if not self.owner_enrollment_enabled:
+                self.owner_reference_images = self.load_owner_images()
             self.init_face_recognizer()
-        if self.face_verify_required and not self.face_ready and not self.allow_unverified_owner:
+        if (
+            self.face_verify_required
+            and not self.face_ready
+            and not self.owner_enrollment_enabled
+            and not self.allow_unverified_owner
+        ):
             raise RuntimeError(
                 "face verification is required but not ready; check owner_image_path and InsightFace model cache"
             )
-        self.init_action_recognizer()
-
     def load_owner_images(self):
         if not self.owner_image_path:
             raise RuntimeError("owner_image_path is empty")
@@ -752,6 +909,272 @@ class RealOwnerSearchBeforeAction:
             if text:
                 parsed.append(text)
         return parsed
+
+    @staticmethod
+    def normalize_owner_name(text):
+        compact = re.sub(r"\s+", "", str(text or ""))
+        compact = re.sub(r"[，。！？,.!?、；;：:“”\"'()（）]", "", compact)
+        if not compact:
+            return ""
+
+        prefix_match = re.search(
+            r"(?:我的名字叫|我的名字是|名字叫|名字是|我叫|我是)([一-龥A-Za-z][一-龥A-Za-z0-9·_-]{0,11})",
+            compact,
+        )
+        if prefix_match:
+            candidate = prefix_match.group(1)
+        else:
+            prompt_match = re.search(
+                r"(?:说出|告诉我)(?:您的|你的)?名字([一-龥A-Za-z][一-龥A-Za-z0-9·_-]{0,11})$",
+                compact,
+            )
+            candidate = prompt_match.group(1) if prompt_match else compact
+
+        candidate = re.split(r"(?:请|确认|重新|重说|谢谢|机器人|主人)", candidate)[0]
+        candidate = re.sub(r"[^一-龥A-Za-z0-9·_-]", "", candidate)
+        if not candidate or len(candidate) > 12:
+            return ""
+        if any(marker in candidate for marker in ("名字", "姓名", "什么", "叫我")):
+            return ""
+        if not prefix_match and len(candidate) > 8:
+            return ""
+        return candidate
+
+    @staticmethod
+    def parse_owner_confirmation(text):
+        compact = re.sub(r"\s+", "", str(text or ""))
+        compact = re.sub(r"[，。！？,.!?、；;：:“”\"'()（）]", "", compact)
+        if not compact:
+            return None
+        if compact in ("不是", "不对", "错了", "重新", "重说", "重来", "否"):
+            return False
+        if compact in ("确认", "确定", "是", "是的", "对", "对的", "正确", "没错", "好的", "我确认"):
+            return True
+        if compact.endswith(("确认", "确定", "是", "是的", "对", "对的", "正确", "没错", "好的")):
+            return True
+        if compact.endswith(("不是", "不对", "错了", "重新", "重说", "重来", "否")):
+            return False
+        if compact.startswith(("确认", "确定", "是的", "对的", "正确", "没错")):
+            return True
+        if compact.startswith(("不是", "不对", "错了", "重新", "重说", "重来", "否")):
+            return False
+        if "正确请回答确认" in compact or "不正确请回答重来" in compact:
+            if compact.endswith("重来") and compact.count("重来") >= 2:
+                return False
+            if compact.endswith("确认") and compact.count("确认") >= 2:
+                return True
+            return None
+        return None
+
+    def current_asr_sequence(self):
+        with self.lock:
+            return int(self.asr_sequence)
+
+    def wait_for_asr_publisher(self):
+        deadline = time.time() + max(1.0, self.owner_enrollment_name_timeout)
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and time.time() < deadline:
+            publisher_count = self.asr_sub.get_num_connections()
+            if publisher_count > 0:
+                rospy.loginfo(
+                    "Owner enrollment ASR publisher ready: topic=%s publishers=%d",
+                    self.asr_topic,
+                    publisher_count,
+                )
+                return True
+            rate.sleep()
+        rospy.logwarn(
+            "Owner enrollment has no ASR publisher on %s; check start_asr/start_voice and microphone input",
+            self.asr_topic,
+        )
+        return False
+
+    def wait_for_owner_name(self, sequence_after, timeout):
+        cursor = int(sequence_after)
+        deadline = time.time() + max(0.1, float(timeout))
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and time.time() < deadline:
+            transcript, cursor = self.collect_asr_since(cursor)
+            if transcript:
+                candidate_name = self.normalize_owner_name(transcript)
+                if candidate_name:
+                    return candidate_name, cursor
+            rate.sleep()
+        return "", cursor
+
+    def wait_for_owner_confirmation(self, sequence_after, timeout):
+        cursor = int(sequence_after)
+        deadline = time.time() + max(0.1, float(timeout))
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and time.time() < deadline:
+            transcript, cursor = self.collect_asr_since(cursor)
+            if transcript:
+                decision = self.parse_owner_confirmation(transcript)
+                if decision is not None:
+                    return decision, cursor
+            rate.sleep()
+        return None, cursor
+
+    def capture_owner_face_embeddings(self):
+        if not self.face_model_ready or self.face_app is None:
+            raise RuntimeError("InsightFace model is not ready for owner enrollment")
+
+        deadline = time.time() + self.owner_enrollment_capture_seconds
+        next_sample_time = 0.0
+        last_image_time = 0.0
+        embeddings = []
+        sample_index = 0
+        rate = rospy.Rate(10)
+
+        while not rospy.is_shutdown() and time.time() < deadline:
+            now = time.time()
+            if now < next_sample_time:
+                rate.sleep()
+                continue
+
+            with self.lock:
+                image = None if self.latest_image is None else self.latest_image.copy()
+                image_time = self.latest_image_time
+
+            if image is None or image_time is None or image_time <= last_image_time:
+                rate.sleep()
+                continue
+            last_image_time = float(image_time)
+
+            try:
+                faces = self.face_app.get(image)
+            except Exception as exc:
+                rospy.logwarn_throttle(2.0, "Owner enrollment face detection failed: %s", exc)
+                rate.sleep()
+                continue
+
+            if len(faces or []) != 1:
+                rospy.logwarn_throttle(
+                    2.0,
+                    "Owner enrollment requires exactly one visible face; detected=%d",
+                    len(faces or []),
+                )
+                rate.sleep()
+                continue
+
+            face = self.select_largest_face(faces)
+            bbox = getattr(face, "bbox", None)
+            if bbox is None or len(bbox) < 4:
+                rate.sleep()
+                continue
+
+            face_width = float(bbox[2]) - float(bbox[0])
+            face_height = float(bbox[3]) - float(bbox[1])
+            det_score = float(getattr(face, "det_score", 0.0) or 0.0)
+            if (
+                min(face_width, face_height) < self.owner_enrollment_min_face_size
+                or det_score < self.face_det_thresh
+            ):
+                rospy.loginfo_throttle(
+                    2.0,
+                    "Owner enrollment face quality too low: size=%.0fx%.0f score=%.2f",
+                    face_width,
+                    face_height,
+                    det_score,
+                )
+                rate.sleep()
+                continue
+
+            embedding = self.normalize_embedding(getattr(face, "embedding", None))
+            if embedding is None:
+                rate.sleep()
+                continue
+
+            embeddings.append(
+                {
+                    "path": "runtime_enrollment_%03d" % sample_index,
+                    "embedding": embedding,
+                }
+            )
+            sample_index += 1
+            next_sample_time = now + self.owner_enrollment_sample_interval
+            rospy.loginfo(
+                "Owner enrollment captured face sample %d/%d",
+                len(embeddings),
+                self.owner_enrollment_min_samples,
+            )
+            rate.sleep()
+
+        if len(embeddings) < self.owner_enrollment_min_samples:
+            raise RuntimeError(
+                "owner enrollment captured only %d/%d usable face samples"
+                % (len(embeddings), self.owner_enrollment_min_samples)
+            )
+
+        mean_embedding = self.normalize_embedding(
+            np.mean(
+                np.asarray([item["embedding"] for item in embeddings], dtype=np.float32),
+                axis=0,
+            )
+        )
+        if mean_embedding is None:
+            raise RuntimeError("owner enrollment produced an invalid face embedding")
+
+        self.owner_face_embedding = mean_embedding
+        self.owner_face_embeddings = embeddings
+        self.face_ready = True
+        rospy.loginfo(
+            "Runtime owner enrollment complete: name=%s samples=%d threshold=%.2f",
+            self.owner_name,
+            len(self.owner_face_embeddings),
+            self.face_accept_threshold,
+        )
+
+    def enroll_owner(self):
+        if not self.owner_enrollment_enabled:
+            return
+        if not self.face_verify_enabled or not self.face_model_ready or self.face_app is None:
+            raise RuntimeError("owner enrollment requires a ready InsightFace model")
+        if not self.wait_for_asr_publisher():
+            raise RuntimeError("owner enrollment ASR topic is not connected")
+
+        confirmed_name = ""
+        for attempt in range(self.owner_enrollment_retries):
+            sequence_before_prompt = self.current_asr_sequence()
+            if attempt == 0:
+                self.say("请在我前方说出您的名字。")
+            else:
+                self.say("我没有听清，请再说一次您的名字。")
+            rospy.sleep(self.owner_enrollment_asr_settle_seconds)
+            candidate_name, sequence_after_name = self.wait_for_owner_name(
+                sequence_before_prompt,
+                self.owner_enrollment_name_timeout,
+            )
+            if not candidate_name:
+                rospy.logwarn("Could not extract owner name from ASR")
+                continue
+
+            sequence_before_confirm = self.current_asr_sequence()
+            self.say(
+                "您说的是%s。请确认这个名字是否正确。正确请回答确认，不正确请回答重来。"
+                % candidate_name
+            )
+            rospy.sleep(self.owner_enrollment_asr_settle_seconds)
+            decision, _ = self.wait_for_owner_confirmation(
+                sequence_before_confirm,
+                self.owner_enrollment_confirm_timeout,
+            )
+            if decision is True:
+                confirmed_name = candidate_name
+                break
+            if attempt + 1 < self.owner_enrollment_retries:
+                self.say("好的，请重新说出您的名字。")
+
+        if not confirmed_name:
+            raise RuntimeError("owner name enrollment was not confirmed")
+
+        self.owner_name = confirmed_name
+        self.say(
+            "好的，%s，请保持一个人站在我前方。我现在采集您的脸部特征。"
+            % self.owner_name
+        )
+        self.capture_owner_face_embeddings()
+        self.say("主人注册完成，我记住您的名字是%s。" % self.owner_name)
 
     @staticmethod
     def parse_waypoint_name_list(value):
@@ -838,6 +1261,15 @@ class RealOwnerSearchBeforeAction:
                 det_thresh=self.face_det_thresh,
                 det_size=(self.face_det_size, self.face_det_size),
             )
+            self.face_model_ready = True
+            if not self.owner_reference_images:
+                self.face_ready = False
+                rospy.loginfo(
+                    "InsightFace model ready for runtime owner enrollment: model=%s ctx_id=%d",
+                    self.face_model_name,
+                    self.face_ctx_id,
+                )
+                return
             owner_embeddings = []
             for path, image in self.owner_reference_images:
                 loaded_for_photo = 0
@@ -875,6 +1307,7 @@ class RealOwnerSearchBeforeAction:
             )
         except Exception as exc:
             self.face_app = None
+            self.face_model_ready = False
             self.owner_face_embedding = None
             self.owner_face_embeddings = []
             self.face_ready = False
@@ -884,37 +1317,445 @@ class RealOwnerSearchBeforeAction:
         if not self.action_recognition_enabled:
             rospy.loginfo("Owner action recognition disabled")
             return
-        if not self.action_model_path:
-            rospy.logwarn("Owner action recognition disabled: action_model_path is empty")
-            return
-        if not os.path.exists(self.action_model_path):
-            rospy.logwarn("Owner action pose model not found: %s", self.action_model_path)
-            return
-
-        if self.action_require_gpu and str(self.action_device).startswith("cuda"):
-            try:
-                import torch
-                if not torch.cuda.is_available():
-                    rospy.logwarn("Owner action recognition requires GPU, but PyTorch CUDA is unavailable")
-                    return
-            except Exception as exc:
-                rospy.logwarn("Owner action recognition cannot check CUDA availability: %s", exc)
-                return
-
         try:
-            from ultralytics import YOLO
-            self.action_pose_model = YOLO(self.action_model_path)
+            self.qwen_action_core, self.qwen_action_core_path = load_qwen_action_core(
+                self.action_core_path
+            )
+            if self.action_pose_enabled:
+                pose_model_path = self.action_model_path
+                if not pose_model_path:
+                    pose_model_path = self.qwen_action_core.PoseActionAnalyzer.resolve_model_path("")
+                self.qwen_pose_analyzer = self.qwen_action_core.PoseActionAnalyzer(
+                    pose_model_path,
+                    self.action_device,
+                    max(160, self.action_imgsz),
+                    self.action_conf,
+                    self.action_iou,
+                    max(1, self.action_max_det),
+                )
+                pose_ready, pose_message = self.qwen_pose_analyzer.initialize()
+                if pose_ready:
+                    rospy.loginfo(
+                        "Qwen pose helper ready: model=%s device=%s",
+                        pose_model_path,
+                        self.action_device,
+                    )
+                else:
+                    self.qwen_pose_analyzer = None
+                    rospy.logwarn("Qwen pose helper disabled: %s", pose_message)
+
+            if self.action_pointcloud_enabled:
+                self.qwen_pointcloud_analyzer = self.qwen_action_core.PointCloudGroundAnalyzer(
+                    self.action_pointcloud_camera_height,
+                    self.action_pointcloud_ground_height_limit,
+                    self.action_pointcloud_furniture_height_limit,
+                    self.action_pointcloud_max_age,
+                    self.action_pointcloud_stride,
+                    self.action_pointcloud_min_samples,
+                    self.action_pointcloud_roi_padding,
+                    self.action_pointcloud_depth_percentile,
+                    self.action_pointcloud_surface_band,
+                    self.action_pointcloud_frame_mode,
+                    self.action_pointcloud_anchor_radius,
+                    self.action_pointcloud_local_ground_padding,
+                    self.action_pointcloud_elevated_delta,
+                )
+
             self.action_ready = True
+            self.warmup_qwen_action_model()
             rospy.loginfo(
-                "Owner action recognition ready: model=%s device=%s seconds=%.1f",
-                self.action_model_path,
-                self.action_device,
+                "Owner Qwen action recognition ready: model=%s core=%s seconds=%.1f frames=%d llm_frames=%d",
+                self.action_llm_model,
+                self.qwen_action_core_path,
                 self.action_sample_seconds,
+                self.action_frame_count,
+                self.action_llm_frame_count,
             )
         except Exception as exc:
-            self.action_pose_model = None
+            self.qwen_action_core = None
+            self.qwen_action_core_path = ""
+            self.qwen_pose_analyzer = None
+            self.qwen_pointcloud_analyzer = None
             self.action_ready = False
-            rospy.logwarn("Failed to initialize owner action recognition: %s", exc)
+            rospy.logwarn("Failed to initialize owner Qwen action recognition: %s", exc)
+
+    def get_latest_action_image(self):
+        with self.lock:
+            if self.latest_image is None:
+                return None
+            return self.latest_image.copy()
+
+    def encode_qwen_action_frame(self, frame):
+        image = frame
+        if self.action_image_max_width > 0 and image.shape[1] > self.action_image_max_width:
+            scale = float(self.action_image_max_width) / float(image.shape[1])
+            image = cv2.resize(
+                image,
+                None,
+                fx=scale,
+                fy=scale,
+                interpolation=cv2.INTER_AREA,
+            )
+        ok, encoded = cv2.imencode(
+            ".jpg",
+            image,
+            [int(cv2.IMWRITE_JPEG_QUALITY), self.action_jpeg_quality],
+        )
+        if not ok:
+            raise RuntimeError("could not encode owner action frame")
+        return base64.b64encode(encoded.tobytes()).decode("ascii")
+
+    def call_qwen_action(self, images_b64, prompt=None, max_tokens=None):
+        images = [images_b64] if isinstance(images_b64, str) else list(images_b64)
+        if not images:
+            raise RuntimeError("no image supplied to Qwen action recognizer")
+        rospy.loginfo(
+            "Sending owner action request to Qwen: model=%s images=%d image_bytes≈%dKB num_ctx=%d",
+            self.action_llm_model,
+            len(images),
+            sum(len(image) for image in images) // 1024,
+            self.action_llm_num_ctx,
+        )
+        payload = {
+            "model": self.action_llm_model,
+            "stream": False,
+            "think": False,
+            "format": "json",
+            "keep_alive": self.action_llm_keep_alive,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt or self.qwen_action_core.PROMPT,
+                    "images": images,
+                }
+            ],
+            "options": {
+                "temperature": 0,
+                "top_p": 0.7,
+                "num_predict": max_tokens or self.action_llm_max_tokens,
+                "num_ctx": self.action_llm_num_ctx,
+                "num_gpu": self.action_llm_num_gpu,
+            },
+        }
+        request = urllib.request.Request(
+            self.action_llm_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        started = time.time()
+        try:
+            with self.ollama_request_lock:
+                with urllib.request.urlopen(
+                    request,
+                    timeout=max(1.0, float(self.action_llm_timeout)),
+                ) as response:
+                    raw = response.read().decode("utf-8")
+        except (TimeoutError, socket.timeout) as exc:
+            raise RuntimeError(
+                "Qwen action request timed out after %.1fs: %s"
+                % (time.time() - started, exc)
+            )
+        except urllib.error.HTTPError as exc:
+            try:
+                detail = exc.read().decode("utf-8", errors="replace").strip()
+            except Exception:
+                detail = ""
+            rospy.logerr(
+                "Qwen owner action HTTP error: code=%s model=%s detail=%s",
+                exc.code,
+                self.action_llm_model,
+                detail,
+            )
+            raise RuntimeError(
+                "Qwen action HTTP %s for model %s: %s"
+                % (exc.code, self.action_llm_model, detail or exc.reason)
+            )
+        except urllib.error.URLError as exc:
+            raise RuntimeError(
+                "Qwen action request failed; check Ollama and model %s: %s"
+                % (self.action_llm_model, exc)
+            )
+
+        try:
+            result = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("invalid Qwen action response: %s" % exc)
+        content = result.get("message", {}).get("content", "").strip()
+        if not content:
+            raise RuntimeError("Qwen action returned empty content: %s" % raw)
+        rospy.loginfo(
+            "Qwen owner action response received in %.2fs",
+            time.time() - started,
+        )
+        return content, time.time() - started
+
+    def warmup_qwen_action_model(self):
+        yolo_paused = False
+        try:
+            if self.action_pause_yolo:
+                self.set_yolo_paused(True)
+                yolo_paused = True
+                if self.action_yolo_pause_settle_seconds > 0.0:
+                    rospy.sleep(self.action_yolo_pause_settle_seconds)
+            deadline = time.time() + max(5.0, self.action_warmup_wait_timeout)
+            frame = self.get_latest_action_image()
+            while frame is None and not rospy.is_shutdown() and time.time() < deadline:
+                rospy.sleep(0.05)
+                frame = self.get_latest_action_image()
+            if frame is None:
+                raise RuntimeError("no camera frame available for Qwen warm-up")
+            if self.qwen_pose_analyzer is not None and self.qwen_pose_analyzer.ready:
+                rospy.loginfo("Warming up owner pose helper")
+                self.qwen_pose_analyzer.warmup(frame)
+                rospy.loginfo("Owner pose helper warm-up complete")
+
+            warmup_prompt = (
+                "/no_think\n"
+                "只输出一行 JSON："
+                '{"action":"unknown","place":"unknown"}。'
+                "这是视觉模型预热请求，不要解释。"
+            )
+            encoded = self.encode_qwen_action_frame(frame)
+            last_error = None
+            for attempt in range(1, self.action_warmup_retries + 1):
+                if rospy.is_shutdown():
+                    return
+                try:
+                    content, elapsed = self.call_qwen_action(
+                        [encoded],
+                        prompt=warmup_prompt,
+                        max_tokens=16,
+                    )
+                    self.qwen_warmup_error = ""
+                    self.qwen_warmup_done.set()
+                    rospy.loginfo(
+                        "Qwen owner-action warm-up complete in %.2fs: %s",
+                        elapsed,
+                        content,
+                    )
+                    return
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < self.action_warmup_retries:
+                        rospy.logwarn(
+                            "Qwen owner-action warm-up attempt %d failed: %s; retrying in %.1fs",
+                            attempt,
+                            exc,
+                            self.action_warmup_retry_delay,
+                        )
+                        rospy.sleep(self.action_warmup_retry_delay)
+            self.qwen_warmup_error = str(last_error)
+            self.qwen_warmup_done.set()
+            rospy.logwarn("Qwen owner-action warm-up failed: %s", self.qwen_warmup_error)
+        except Exception as exc:
+            self.qwen_warmup_error = str(exc)
+            self.qwen_warmup_done.set()
+            rospy.logwarn("Qwen owner-action warm-up failed: %s", exc)
+        finally:
+            if yolo_paused:
+                self.set_yolo_paused(False)
+
+    def wait_for_qwen_action_warmup(self):
+        if self.qwen_warmup_done.wait(timeout=self.action_warmup_wait_timeout):
+            if self.qwen_warmup_error:
+                rospy.logwarn(
+                    "Continuing owner action recognition after warm-up failure: %s",
+                    self.qwen_warmup_error,
+                )
+            return not self.qwen_warmup_error
+        rospy.logwarn(
+            "Qwen owner-action warm-up is still running after %.1fs",
+            self.action_warmup_wait_timeout,
+        )
+        return False
+
+    def ensure_qwen_action_warmup(self):
+        if not self.action_ready or self.qwen_action_core is None:
+            return False
+        if self.qwen_warmup_done.is_set() and self.qwen_warmup_error:
+            rospy.logwarn(
+                "Qwen owner-action warm-up already failed; continuing without a duplicate startup retry"
+            )
+        return self.wait_for_qwen_action_warmup()
+
+    def extract_owner_pose_features(self, frames, samples, target_centers):
+        if self.qwen_pose_analyzer is None or not self.qwen_pose_analyzer.ready:
+            return [], "unknown", 0.0, "pose disabled"
+
+        rospy.loginfo("Running pose helper on %d owner action frames", len(frames))
+        pose_features = self.qwen_pose_analyzer.extract_features(
+            frames,
+            target_centers=target_centers,
+        )
+        mapped_features = []
+        for index, feature in enumerate(pose_features):
+            frame_index = int(feature.get("frame_index", index))
+            sample = samples[frame_index] if frame_index < len(samples) else samples[index]
+            mapped_features.append(
+                self.map_qwen_pose_feature_to_full_frame(feature, sample)
+            )
+        pose_action, pose_confidence, pose_reason = self.qwen_pose_analyzer.classify(
+            mapped_features
+        )
+        rospy.loginfo(
+            "Pose fusion complete: features=%d action=%s confidence=%.2f",
+            len(mapped_features),
+            pose_action,
+            pose_confidence,
+        )
+        return mapped_features, pose_action, pose_confidence, pose_reason
+
+    def extract_owner_pose_features_worker(
+        self,
+        result_holder,
+        frames,
+        samples,
+        target_centers,
+    ):
+        try:
+            result_holder["value"] = self.extract_owner_pose_features(
+                frames,
+                samples,
+                target_centers,
+            )
+        except Exception as exc:
+            result_holder["error"] = exc
+
+    def capture_qwen_action_frames(self):
+        frame_count = max(1, self.action_frame_count)
+        duration = max(0.0, self.action_sample_seconds)
+        if frame_count == 1:
+            sample_times = [0.0]
+        else:
+            interval = duration / float(frame_count - 1)
+            sample_times = [interval * index for index in range(frame_count)]
+
+        samples = []
+        capture_started = time.time()
+        for sample_index, sample_time in enumerate(sample_times, start=1):
+            while not rospy.is_shutdown():
+                remaining = sample_time - (time.time() - capture_started)
+                if remaining <= 0.0:
+                    break
+                rospy.sleep(min(0.05, remaining))
+            if rospy.is_shutdown():
+                break
+            frame, source_meta = self.snapshot_owner_action_image()
+            if frame is not None:
+                samples.append(
+                    {
+                        "image": frame,
+                        "full_image": source_meta.get("debug_image", frame),
+                        "source_meta": source_meta,
+                    }
+                )
+            rospy.loginfo_throttle(
+                1.0,
+                "Captured owner action frame %d/%d",
+                sample_index,
+                frame_count,
+            )
+
+        if not samples:
+            raise RuntimeError("no camera frames available for owner action recognition")
+        return samples
+
+    @staticmethod
+    def map_qwen_pose_feature_to_full_frame(feature, sample):
+        mapped = dict(feature)
+        source_meta = sample.get("source_meta") or {}
+        full_image = sample.get("full_image")
+        if full_image is None:
+            return mapped
+        full_height, full_width = full_image.shape[:2]
+        crop_box = source_meta.get("crop_box")
+        if crop_box is None:
+            return mapped
+
+        crop_x1, crop_y1, _crop_x2, _crop_y2 = [
+            float(value) for value in crop_box
+        ]
+        crop_width = max(1.0, float(crop_box[2]) - crop_x1)
+        crop_height = max(1.0, float(crop_box[3]) - crop_y1)
+
+        def map_point(point):
+            if point is None:
+                return None
+            return (float(point[0]) + crop_x1, float(point[1]) + crop_y1)
+
+        bbox = mapped.get("bbox")
+        if bbox is not None and len(bbox) == 4:
+            mapped_bbox = (
+                float(bbox[0]) + crop_x1,
+                float(bbox[1]) + crop_y1,
+                float(bbox[2]) + crop_x1,
+                float(bbox[3]) + crop_y1,
+            )
+            mapped["bbox"] = mapped_bbox
+            mapped["center_y"] = (
+                0.5 * (mapped_bbox[1] + mapped_bbox[3]) / max(1.0, float(full_height))
+            )
+            mapped["height"] = (
+                max(1.0, mapped_bbox[3] - mapped_bbox[1])
+                / max(1.0, float(full_height))
+            )
+            mapped["aspect"] = max(
+                1e-6,
+                (mapped_bbox[2] - mapped_bbox[0])
+                / max(1.0, mapped_bbox[3] - mapped_bbox[1]),
+            )
+
+        body_bbox = mapped.get("body_bbox")
+        if body_bbox is not None and len(body_bbox) == 4:
+            mapped["body_bbox"] = (
+                float(body_bbox[0]) + crop_x1,
+                float(body_bbox[1]) + crop_y1,
+                float(body_bbox[2]) + crop_x1,
+                float(body_bbox[3]) + crop_y1,
+            )
+        if mapped.get("body_anchors"):
+            mapped["body_anchors"] = [
+                map_point(point) for point in mapped["body_anchors"]
+            ]
+        for side in ("left", "right"):
+            wrist_x_key = "%s_wrist_x" % side
+            wrist_y_key = "%s_wrist_y" % side
+            wrist_x = mapped.get(wrist_x_key)
+            wrist_y = mapped.get(wrist_y_key)
+            if wrist_x is not None:
+                mapped[wrist_x_key] = (
+                    float(wrist_x) * crop_width + crop_x1
+                ) / max(1.0, float(full_width))
+            if wrist_y is not None:
+                mapped[wrist_y_key] = (
+                    float(wrist_y) * crop_height + crop_y1
+                ) / max(1.0, float(full_height))
+        return mapped
+
+    def get_latest_action_pointcloud(self):
+        with self.lock:
+            return self.latest_pointcloud, self.latest_pointcloud_time
+
+    def analyze_qwen_ground_relation(self, frame, pose_features):
+        if not self.action_pointcloud_enabled or self.qwen_pointcloud_analyzer is None:
+            return {"status": "unknown", "reason": "point cloud disabled"}
+        if frame is None:
+            return {"status": "unknown", "reason": "no final image"}
+        if not pose_features:
+            return {"status": "unknown", "reason": "no pose bbox"}
+        final_feature = pose_features[-1]
+        bbox = final_feature.get("body_bbox") or final_feature.get("bbox")
+        anchors = final_feature.get("body_anchors") or []
+        cloud, cloud_stamp = self.get_latest_action_pointcloud()
+        cloud_age = time.time() - cloud_stamp if cloud_stamp else None
+        return self.qwen_pointcloud_analyzer.analyze(
+            cloud,
+            cloud_age,
+            frame.shape,
+            bbox,
+            anchors=anchors,
+        )
 
     def snapshot_owner_action_image(self):
         with self.lock:
@@ -1181,10 +2022,25 @@ class RealOwnerSearchBeforeAction:
         if compact_seated_box:
             sitting_score += 0.25
 
+        sitting_structural_support = (
+            bent_knee
+            or knees_near_hips
+            or (any_knee_near_hip and (thigh_horizontal or ankle_near_hip))
+        )
         sitting_min_torso = self.action_sitting_min_torso_verticality
         sitting_support_threshold = self.action_sitting_support_score
-        sitting_support_like = torso_v > sitting_min_torso and sitting_score >= sitting_support_threshold and not lying_like
-        sitting_like = torso_v > sitting_min_torso and sitting_score >= 1.0 and not lying_like
+        sitting_support_like = (
+            torso_v > sitting_min_torso
+            and sitting_score >= sitting_support_threshold
+            and sitting_structural_support
+            and not lying_like
+        )
+        sitting_like = (
+            torso_v > sitting_min_torso
+            and sitting_score >= 1.0
+            and sitting_structural_support
+            and not lying_like
+        )
         upright_like = torso_v > 0.65 and posture_aspect < 1.05
 
         return {
@@ -1205,6 +2061,7 @@ class RealOwnerSearchBeforeAction:
             "thigh_horizontal": thigh_horizontal,
             "ankle_near_hip": ankle_near_hip,
             "compact_seated_box": compact_seated_box,
+            "sitting_structural_support": sitting_structural_support,
             "sitting_score": sitting_score,
             "sitting_support_like": sitting_support_like,
             "sitting_like": sitting_like,
@@ -1407,55 +2264,269 @@ class RealOwnerSearchBeforeAction:
                 self.owner_track_center = float(det.center_x) / image_width
 
         if not self.action_recognition_enabled:
+            self.last_owner_action_place = "unknown"
+            self.last_owner_action_result = {}
             return "unknown", 0.0, "disabled"
-        if not self.action_ready or self.action_pose_model is None:
-            return "unknown", 0.0, "pose unavailable"
+        if not self.action_ready or self.qwen_action_core is None:
+            self.last_owner_action_place = "unknown"
+            self.last_owner_action_result = {}
+            return "unknown", 0.0, "Qwen action recognizer unavailable"
 
         self.stop_base()
-        if self.action_pause_yolo:
-            self.set_yolo_paused(True)
-            rospy.sleep(0.15)
-
-        features = []
-        deadline = time.time() + max(0.5, self.action_sample_seconds)
-        interval = 1.0 / max(1.0, self.action_sample_rate)
-        next_sample = 0.0
-        rospy.loginfo("Recognizing owner action for %.1fs with robot camera", self.action_sample_seconds)
+        yolo_paused = False
         try:
-            while not rospy.is_shutdown() and time.time() < deadline:
-                now = time.time()
-                if now >= next_sample:
-                    image, source_meta = self.snapshot_owner_action_image()
-                    feature = self.predict_owner_pose_feature(image, source_meta=source_meta)
-                    if feature is not None:
-                        features.append(feature)
-                    next_sample = now + interval
-                rospy.sleep(0.02)
-        finally:
             if self.action_pause_yolo:
+                self.set_yolo_paused(True)
+                yolo_paused = True
+                if self.action_yolo_pause_settle_seconds > 0.0:
+                    rospy.sleep(self.action_yolo_pause_settle_seconds)
+
+            started = time.time()
+            samples = self.capture_qwen_action_frames()
+            frames = [sample["image"] for sample in samples]
+            full_frames = [sample["full_image"] for sample in samples]
+            target_centers = [
+                (sample.get("source_meta") or {}).get("pose_target_center_norm")
+                for sample in samples
+            ]
+            capture_elapsed = time.time() - started
+
+            try:
+                pose_features, pose_action, pose_confidence, pose_reason = (
+                    self.extract_owner_pose_features(
+                        frames,
+                        samples,
+                        target_centers,
+                    )
+                )
+            except Exception as exc:
+                pose_features = []
+                pose_action = "unknown"
+                pose_confidence = 0.0
+                pose_reason = "pose error: %s" % exc
+                rospy.logwarn(
+                    "Owner pose action analysis failed; continuing with Qwen static-action recognition: %s",
+                    exc,
+                )
+
+            if pose_action in ("waving", "sudden_fall"):
+                place = "floor" if pose_action == "sudden_fall" else "unknown"
+                total_elapsed = time.time() - started
+                self.last_owner_action_place = place
+                self.last_owner_action_result = {
+                    "action": pose_action,
+                    "place": place,
+                    "recognizer": "yolo_pose",
+                    "pose_action": pose_action,
+                    "pose_confidence": round(float(pose_confidence), 3),
+                    "pose_reason": pose_reason,
+                    "pose_feature_count": len(pose_features),
+                    "capture_sec": round(capture_elapsed, 3),
+                    "total_sec": round(total_elapsed, 3),
+                    "frame_count": len(frames),
+                }
+                reason = (
+                    "YOLO-Pose=%s(%.2f); %s; frames=%d; total=%.2fs"
+                    % (
+                        pose_action,
+                        pose_confidence,
+                        pose_reason,
+                        len(frames),
+                        total_elapsed,
+                    )
+                )
+                rospy.loginfo(
+                    "Owner dynamic action verdict: action=%s place=%s confidence=%.2f "
+                    "features=%d frames=%d total=%.2fs",
+                    pose_action,
+                    place,
+                    pose_confidence,
+                    len(pose_features),
+                    len(frames),
+                    total_elapsed,
+                )
+                return pose_action, float(pose_confidence), reason
+
+            warmup_ready = self.wait_for_qwen_action_warmup()
+            if not warmup_ready and not self.qwen_warmup_done.is_set():
+                rospy.loginfo(
+                    "Waiting for the existing Qwen warm-up request to finish before static action recognition"
+                )
+                while not rospy.is_shutdown() and not self.qwen_warmup_done.wait(0.5):
+                    pass
+            if rospy.is_shutdown():
+                return "unknown", 0.0, "ROS shutdown during Qwen warm-up"
+
+            llm_frames = frames
+            if len(frames) > self.action_llm_frame_count:
+                indexes = [
+                    int(
+                        round(
+                            index
+                            * (len(frames) - 1)
+                            / float(self.action_llm_frame_count - 1)
+                        )
+                )
+                for index in range(self.action_llm_frame_count)
+            ]
+            llm_frames = [frames[index] for index in indexes]
+
+            images_b64 = [self.encode_qwen_action_frame(frame) for frame in llm_frames]
+            rospy.loginfo(
+                "Owner action frames encoded: capture=%d, qwen=%d; starting Qwen inference",
+                len(frames),
+                len(llm_frames),
+            )
+
+            try:
+                content, qwen_elapsed = self.call_qwen_action(images_b64)
+            except RuntimeError as exc:
+                error_text = str(exc).lower()
+                if len(images_b64) <= 1 or "context" not in error_text:
+                    raise
+                rospy.logwarn(
+                    "Qwen multi-frame request was rejected by context limits; retrying with the latest frame: %s",
+                    exc,
+                )
+                content, qwen_elapsed = self.call_qwen_action([images_b64[-1]])
+
+            qwen_action, place = self.qwen_action_core.parse_result(content)
+            qwen_action_raw = qwen_action
+            if qwen_action in ("waving", "sudden_fall"):
+                rospy.logwarn(
+                    "Ignoring Qwen dynamic action=%s because dynamic actions require YOLO-Pose evidence",
+                    qwen_action,
+                )
+                qwen_action = "unknown"
+                place = "unknown"
+            rospy.loginfo(
+                "Qwen owner static action parsed: action=%s raw_action=%s place=%s; starting point-cloud support analysis",
+                qwen_action,
+                qwen_action_raw,
+                place,
+            )
+
+            rospy.loginfo("Starting owner action point-cloud support-surface analysis")
+            ground_relation = self.analyze_qwen_ground_relation(
+                full_frames[-1],
+                pose_features,
+            )
+            rospy.loginfo(
+                "Point-cloud support-surface analysis complete: status=%s reason=%s",
+                ground_relation.get("status", "unknown"),
+                ground_relation.get("reason", ""),
+            )
+            final_pose_is_horizontal = bool(
+                pose_features and pose_features[-1].get("lying_like")
+            )
+            action, place, ground_fallen, elevated_lying = (
+                self.qwen_action_core.merge_action_result(
+                    qwen_action,
+                    place,
+                    "unknown",
+                    ground_relation,
+                    final_pose_is_horizontal,
+                )
+            )
+            total_elapsed = time.time() - started
+            self.last_owner_action_place = place
+            self.last_owner_action_result = {
+                "action": action,
+                "place": place,
+                "recognizer": "qwen_static",
+                "raw": content,
+                "qwen_action": qwen_action_raw,
+                "qwen_action_used": qwen_action,
+                "pose_action": "unknown",
+                "pose_confidence": round(pose_confidence, 3),
+                "pose_reason": pose_reason,
+                "pose_feature_count": len(pose_features),
+                "ground_relation": ground_relation,
+                "ground_fallen": ground_fallen,
+                "elevated_lying": elevated_lying,
+                "capture_sec": round(capture_elapsed, 3),
+                "qwen_sec": round(qwen_elapsed, 3),
+                "total_sec": round(total_elapsed, 3),
+                "frame_count": len(frames),
+                "llm_frame_count": len(llm_frames),
+            }
+            confidence = max(
+                0.35,
+                float(pose_confidence) if action in ("waving", "sudden_fall") else 0.0,
+            )
+            if action == qwen_action and qwen_action not in ("unknown", "waving", "sudden_fall"):
+                confidence = max(confidence, 0.70)
+            reason = (
+                "Qwen=%s/%s; pose_dynamic=%s(%.2f); ground=%s; frames=%d/%d; total=%.2fs"
+                % (
+                    qwen_action_raw,
+                    place,
+                    pose_action,
+                    pose_confidence,
+                    ground_relation.get("status", "unknown"),
+                    len(frames),
+                    len(llm_frames),
+                    total_elapsed,
+                )
+            )
+            rospy.loginfo(
+                "Owner action verdict: action=%s place=%s qwen=%s used=%s pose_dynamic=%s(%.2f) "
+                "ground=%s frames=%d/%d total=%.2fs",
+                action,
+                place,
+                qwen_action_raw,
+                qwen_action,
+                pose_action,
+                pose_confidence,
+                ground_relation.get("status", "unknown"),
+                len(frames),
+                len(llm_frames),
+                total_elapsed,
+            )
+            return action, confidence, reason
+        except Exception as exc:
+            self.last_owner_action_place = "unknown"
+            self.last_owner_action_result = {"error": str(exc)}
+            rospy.logwarn("Owner Qwen action recognition failed: %s", exc)
+            return "unknown", 0.0, "Qwen action error: %s" % exc
+        finally:
+            if yolo_paused:
                 self.set_yolo_paused(False)
 
-        label, confidence, reason = self.classify_owner_action(features)
-        rospy.loginfo(
-            "Owner action verdict: label=%s confidence=%.2f reason=%s samples=%d",
-            label,
-            confidence,
-            reason,
-            len(features),
-        )
-        return label, confidence, reason
-
     @staticmethod
-    def action_to_speech(label):
+    def action_to_speech(label, place="unknown"):
         messages = {
             "falling": "识别到主人摔倒。",
             "lying_ground": "识别到主人摔倒。",
-            "waving": "主人正在挥手示意。",
-            "lying": "识别到主人躺下。",
-            "sitting": "主人当前坐着。",
+            "sudden_fall": "主人突然摔倒在地上。",
+            "fallen": "主人已经摔倒在地上。",
             "standing": "主人当前站立，没有检测到指定异常动作。",
             "unknown": "我已识别到主人，但动作不确定。",
         }
+        if label == "waving":
+            if place in ("chair", "sofa", "bed"):
+                return "主人正在挥手，人在%s。" % {
+                    "chair": "椅子上",
+                    "sofa": "沙发上",
+                    "bed": "床上",
+                }[place]
+            return "主人正在挥手。"
+        if label == "lying":
+            if place in ("chair", "sofa", "bed"):
+                return "主人正躺在%s。" % {
+                    "chair": "椅子上",
+                    "sofa": "沙发上",
+                    "bed": "床上",
+                }[place]
+            return "主人正在躺着。"
+        if label == "sitting":
+            if place in ("chair", "sofa", "bed"):
+                return "主人正坐在%s。" % {
+                    "chair": "椅子上",
+                    "sofa": "沙发上",
+                    "bed": "床上",
+                }[place]
+            return "主人正在坐着。"
         return messages.get(label, messages["unknown"])
 
     def image_callback(self, msg):
@@ -1731,11 +2802,12 @@ class RealOwnerSearchBeforeAction:
             )
             try:
                 start = time.time()
-                with urllib.request.urlopen(
-                    request,
-                    timeout=max(1.0, float(self.electrical_switch_ollama_warmup_timeout)),
-                ) as response:
-                    response.read()
+                with self.ollama_request_lock:
+                    with urllib.request.urlopen(
+                        request,
+                        timeout=max(1.0, float(self.electrical_switch_ollama_warmup_timeout)),
+                    ) as response:
+                        response.read()
                 self.electrical_switch_ollama_available = True
                 rospy.loginfo(
                     "Electrical switch Ollama model warmed in %.2fs: %s",
@@ -2305,10 +3377,11 @@ class RealOwnerSearchBeforeAction:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(
-                request, timeout=max(1.0, self.electrical_switch_ollama_timeout)
-            ) as response:
-                raw = response.read().decode("utf-8")
+            with self.ollama_request_lock:
+                with urllib.request.urlopen(
+                    request, timeout=max(1.0, self.electrical_switch_ollama_timeout)
+                ) as response:
+                    raw = response.read().decode("utf-8")
             result = json.loads(raw)
             content = result.get("message", {}).get("content", "").strip()
             action = self.parse_electrical_switch_action(content)
@@ -4780,13 +5853,13 @@ class RealOwnerSearchBeforeAction:
             return False
 
         if self.speak_on_owner_found:
-            self.say("我已经识别到主人。")
+            self.say("我已经识别到主人%s。" % self.owner_name)
 
         centered = self.center_owner_in_camera(owner_candidate)
         if not centered:
             rospy.logwarn("Owner centering unstable; skipping centering and continuing action recognition")
 
-        self.say("识别中。")
+        self.say("识别中。", hold=0.0)
         action_label, action_confidence, action_reason = self.recognize_owner_action(owner_candidate)
         rospy.loginfo(
             "Owner action summary at %s: label=%s confidence=%.2f reason=%s",
@@ -4797,19 +5870,13 @@ class RealOwnerSearchBeforeAction:
         )
         normalized_action = str(action_label).strip().lower()
         initial_approach_position = None
-        if normalized_action in self.already_fallen_surface_labels:
-            normalized_action, lying_surface_reason, initial_approach_position = self.classify_static_lying_surface(
-                owner_candidate
-            )
-            action_label = normalized_action
-            rospy.loginfo(
-                "Already-fallen surface verdict at %s: label=%s reason=%s",
-                self.waypoint_name,
-                normalized_action,
-                lying_surface_reason,
-            )
-
-        self.say(self.action_to_speech(action_label), hold=self.action_speech_hold)
+        self.say(
+            self.action_to_speech(
+                action_label,
+                self.last_owner_action_place,
+            ),
+            hold=self.action_speech_hold,
+        )
         if normalized_action in self.fall_approach_action_labels:
             needs_fall_assist_arm = normalized_action in self.fall_assist_arm_action_labels
             approached = self.approach_fallen_owner(owner_candidate, initial_position=initial_approach_position)
@@ -4864,6 +5931,9 @@ class RealOwnerSearchBeforeAction:
         self.set_yolo_paused(False)
         self.rename_exit_waypoint_alias_if_needed()
         self.wait_for_hardware_inputs()
+        self.enroll_owner()
+        self.init_action_recognizer()
+        self.ensure_qwen_action_warmup()
 
         if self.speak_on_start:
             waypoint_labels = "、".join(self.waypoint_display_name(name) for name in self.task_waypoint_names)

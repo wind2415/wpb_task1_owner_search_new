@@ -21,11 +21,15 @@ catkin_package(
 )
 
 catkin_install_python(PROGRAMS
+  scripts/owner_voice_reid_test.py
+  scripts/person_reid_owner_test.py
   scripts/robot_mic_test.py
   scripts/task1_find_owner_real.py
+  scripts/yoloworld_async.py
+  scripts/yoloworld_debug_viewer_stable.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-install(DIRECTORY config data docs launch maps tools
+install(DIRECTORY config data docs launch maps models third_party tools
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

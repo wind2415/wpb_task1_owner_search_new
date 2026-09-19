@@ -1,0 +1,101 @@
+<launch>
+  <arg name="start_camera" default="true" />
+  <arg name="start_yolo" default="true" />
+  <arg name="show_yolo_viewer" default="false" />
+  <arg name="start_voice" default="true" />
+  <arg name="start_asr" default="false" />
+  <arg name="start_tts" default="true" />
+  <arg name="start_sound_play" default="true" />
+
+  <arg name="image_topic" default="/kinect2/qhd/image_color_rect" />
+  <arg name="detections_topic" default="/perception/person_detections_2d" />
+  <arg name="yolo_debug_image_topic" default="/perception/yoloworld/debug_image" />
+  <arg name="yolo_output" default="screen" />
+  <arg name="yolo_device" default="cuda:0" />
+  <arg name="yolo_require_gpu" default="false" />
+  <arg name="yolo_imgsz" default="384" />
+  <arg name="yolo_process_every_n" default="2" />
+  <arg name="yolo_publish_debug" default="false" />
+
+  <arg name="reid_device" default="cpu" />
+  <arg name="reid_model_name" default="osnet_x0_25" />
+  <arg name="reid_model_path" default="" />
+  <arg name="match_threshold" default="0.70" />
+  <arg name="record_seconds" default="3.0" />
+  <arg name="record_sample_count" default="6" />
+  <arg name="record_min_samples" default="3" />
+  <arg name="reuse_existing_profile" default="false" />
+  <arg name="stop_after_first_match" default="false" />
+  <arg name="allow_color_fallback" default="false" />
+  <arg name="profile_dir" default="$(find wpb_task1_owner_search)/data/reid_owner" />
+
+  <group if="$(arg start_camera)">
+    <include file="$(find wpb_task1_owner_search)/launch/kinect2_owner_search.launch">
+      <arg name="fps_limit" value="15.0" />
+      <arg name="start_qhd_points" value="false" />
+    </include>
+  </group>
+
+  <group if="$(arg start_yolo)">
+    <node pkg="wpb_task1_owner_search" type="yoloworld_async.py" name="yoloworld"
+          output="$(arg yolo_output)" respawn="true" respawn_delay="2.0">
+      <env name="PYTORCH_CUDA_ALLOC_CONF" value="expandable_segments:True" />
+      <param name="image_topic" value="$(arg image_topic)" />
+      <param name="model_path" value="$(find yoloworld_perception)/models/yolov8s-world-person.pt" />
+      <param name="device" value="$(arg yolo_device)" />
+      <param name="require_gpu" value="$(arg yolo_require_gpu)" />
+      <param name="imgsz" value="$(arg yolo_imgsz)" />
+      <param name="conf" value="0.30" />
+      <param name="iou" value="0.45" />
+      <param name="max_det" value="5" />
+      <param name="process_every_n" value="$(arg yolo_process_every_n)" />
+      <param name="classes" value="person" />
+      <param name="warmup" value="true" />
+      <param name="publish_debug" value="$(arg yolo_publish_debug)" />
+      <remap from="~detections" to="$(arg detections_topic)" />
+      <remap from="~debug_image" to="$(arg yolo_debug_image_topic)" />
+    </node>
+  </group>
+
+  <node if="$(arg show_yolo_viewer)" pkg="wpb_task1_owner_search"
+        type="yoloworld_debug_viewer_stable.py" name="person_reid_yolo_viewer"
+        output="$(arg yolo_output)" respawn="true" respawn_delay="2.0">
+    <param name="image_topic" value="$(arg image_topic)" />
+    <param name="detections_topic" value="$(arg detections_topic)" />
+    <param name="show_raw" value="false" />
+    <param name="show_debug" value="true" />
+    <param name="debug_window" value="Person ReID Owner Test" />
+  </node>
+
+  <group if="$(arg start_voice)">
+    <include file="$(find offline_voice_bridge)/launch/offline_voice_zh.launch">
+      <arg name="start_asr" value="$(arg start_asr)" />
+      <arg name="start_tts" value="$(arg start_tts)" />
+      <arg name="start_sound_play" value="$(arg start_sound_play)" />
+      <arg name="asr_capture_device" value="default" />
+      <arg name="asr_capture_backend" value="pulse" />
+      <arg name="asr_capture_volume" value="150%" />
+      <arg name="asr_capture_gain" value="2.0" />
+      <arg name="asr_energy_threshold" value="80" />
+    </include>
+  </group>
+
+  <node pkg="wpb_task1_owner_search" type="person_reid_owner_test.py"
+        name="person_reid_owner_test" output="screen">
+    <param name="image_topic" value="$(arg image_topic)" />
+    <param name="detections_topic" value="$(arg detections_topic)" />
+    <param name="say_topic" value="/voice/say" />
+    <param name="torchreid_root" value="$(find wpb_task1_owner_search)/third_party/deep-person-reid" />
+    <param name="profile_dir" value="$(arg profile_dir)" />
+    <param name="reid_device" value="$(arg reid_device)" />
+    <param name="reid_model_name" value="$(arg reid_model_name)" />
+    <param name="reid_model_path" value="$(arg reid_model_path)" />
+    <param name="match_threshold" value="$(arg match_threshold)" />
+    <param name="record_seconds" value="$(arg record_seconds)" />
+    <param name="record_sample_count" value="$(arg record_sample_count)" />
+    <param name="record_min_samples" value="$(arg record_min_samples)" />
+    <param name="reuse_existing_profile" value="$(arg reuse_existing_profile)" />
+    <param name="stop_after_first_match" value="$(arg stop_after_first_match)" />
+    <param name="allow_color_fallback" value="$(arg allow_color_fallback)" />
+  </node>
+</launch>

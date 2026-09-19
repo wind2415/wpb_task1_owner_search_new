@@ -14,6 +14,7 @@ import wave
 
 UNTIL_RESULT_FLAG = "--until-result"
 DEFAULT_READY_DING_WAV = "/dev/shm/local_switch_ready_ding.wav"
+DEFAULT_QWEN_MODEL = "qwen3.5:0.8b"
 
 
 def env_flag(name, default=True):
@@ -173,6 +174,15 @@ def load_external_script(script_path):
     return module
 
 
+def ensure_default_qwen_model():
+    if any(
+        argument == "--llm-model" or argument.startswith("--llm-model=")
+        for argument in sys.argv[1:]
+    ):
+        return
+    sys.argv.extend(["--llm-model", DEFAULT_QWEN_MODEL])
+
+
 def run_until_result(script_path):
     module = load_external_script(script_path)
     force_ollama_cpu_options(module)
@@ -236,6 +246,7 @@ def main():
     until_result = UNTIL_RESULT_FLAG in sys.argv[1:]
     if until_result:
         sys.argv = [arg for arg in sys.argv if arg != UNTIL_RESULT_FLAG]
+    ensure_default_qwen_model()
 
     script_path = find_external_script()
     if script_path:

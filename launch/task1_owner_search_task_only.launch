@@ -10,11 +10,23 @@
   <arg name="start_tts" default="true" />
   <arg name="start_sound_play" default="true" />
   <arg name="asr_capture_device" default="default" />
-  <arg name="asr_energy_threshold" default="200" />
+  <arg name="asr_capture_backend" default="pulse" />
+  <arg name="asr_capture_source" default="" />
+  <arg name="asr_capture_volume" default="150%" />
+  <arg name="asr_capture_gain" default="2.0" />
+  <arg name="asr_energy_threshold" default="80" />
   <arg name="image_topic" default="/kinect2/qhd/image_color_rect" />
   <arg name="detections_topic" default="/perception/person_detections_2d" />
   <arg name="points_topic" default="/kinect2/qhd/points" />
   <arg name="owner_image_path" default="$(find wpb_task1_owner_search)/data/owner" />
+  <arg name="action_llm_url" default="http://127.0.0.1:11434/api/chat" />
+  <arg name="action_llm_model" default="qwen3.5:0.8b" />
+  <arg name="action_sample_seconds" default="5.0" />
+  <arg name="action_frame_count" default="9" />
+  <arg name="action_llm_frame_count" default="3" />
+  <arg name="action_llm_num_ctx" default="4096" />
+  <arg name="action_llm_num_gpu" default="0" />
+  <arg name="action_image_max_width" default="320" />
 
   <param name="/asr/capture_device" value="$(arg asr_capture_device)" />
   <param name="/asr/energy_threshold" value="$(arg asr_energy_threshold)" />
@@ -28,6 +40,10 @@
     <arg name="start_tts" value="$(arg start_tts)" />
     <arg name="start_sound_play" value="$(arg start_sound_play)" />
     <arg name="asr_capture_device" value="$(arg asr_capture_device)" />
+    <arg name="asr_capture_backend" value="$(arg asr_capture_backend)" />
+    <arg name="asr_capture_source" value="$(arg asr_capture_source)" />
+    <arg name="asr_capture_volume" value="$(arg asr_capture_volume)" />
+    <arg name="asr_capture_gain" value="$(arg asr_capture_gain)" />
     <arg name="asr_energy_threshold" value="$(arg asr_energy_threshold)" />
     <arg name="start_task" value="true" />
     <arg name="start_rviz" value="false" />
@@ -41,5 +57,13 @@
     <arg name="detections_topic" value="$(arg detections_topic)" />
     <arg name="points_topic" value="$(arg points_topic)" />
     <arg name="owner_image_path" value="$(arg owner_image_path)" />
+    <arg name="action_llm_url" value="$(arg action_llm_url)" />
+    <arg name="action_llm_model" value="$(arg action_llm_model)" />
+    <arg name="action_sample_seconds" value="$(arg action_sample_seconds)" />
+    <arg name="action_frame_count" value="$(arg action_frame_count)" />
+    <arg name="action_llm_frame_count" value="$(arg action_llm_frame_count)" />
+    <arg name="action_llm_num_ctx" value="$(arg action_llm_num_ctx)" />
+    <arg name="action_llm_num_gpu" value="$(arg action_llm_num_gpu)" />
+    <arg name="action_image_max_width" value="$(arg action_image_max_width)" />
   </include>
 </launch>

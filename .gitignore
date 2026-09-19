@@ -35,3 +35,7 @@ env/
 *.bag
 *.db3
 .ros/
+# Runtime Re-ID enrollment outputs
+data/reid_owner/
+models/reid/*.pth
+models/reid/*.pt

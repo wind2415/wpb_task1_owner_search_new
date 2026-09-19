@@ -1,0 +1,124 @@
+{
+  "created_at": "2026-09-16 21:19:18",
+  "backend": "torchreid",
+  "model_name": "osnet_x0_25",
+  "model_path": "",
+  "device": "cpu",
+  "match_threshold": 0.7,
+  "lying_pose_enhancement": true,
+  "lying_match_threshold": 0.6,
+  "lying_min_reid_score": 0.5,
+  "lying_required_consecutive": 3,
+  "has_color_embedding": true,
+  "samples": [
+    {
+      "index": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789564757031.jpg",
+      "bbox": [
+        392,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        378,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.93165123462677,
+      "area_ratio": 0.17201003086419753
+    },
+    {
+      "index": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789564757324.jpg",
+      "bbox": [
+        393,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        379,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.9288895130157471,
+      "area_ratio": 0.17108024691358026
+    },
+    {
+      "index": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789564757625.jpg",
+      "bbox": [
+        393,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        379,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.9283037781715393,
+      "area_ratio": 0.17108024691358026
+    },
+    {
+      "index": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789564757961.jpg",
+      "bbox": [
+        393,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        379,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.9280969500541687,
+      "area_ratio": 0.17108024691358026
+    },
+    {
+      "index": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789564758259.jpg",
+      "bbox": [
+        392,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        378,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.9304447770118713,
+      "area_ratio": 0.17201003086419753
+    },
+    {
+      "index": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789564758592.jpg",
+      "bbox": [
+        392,
+        57,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        378,
+        19,
+        591,
+        539
+      ],
+      "det_score": 0.9283141493797302,
+      "area_ratio": 0.17201003086419753
+    }
+  ],
+  "owner_name": "龙语祥"
+}

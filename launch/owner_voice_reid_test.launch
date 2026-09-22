@@ -2,6 +2,8 @@
   <arg name="start_camera" default="true" />
   <arg name="start_yolo" default="true" />
   <arg name="start_voice" default="true" />
+  <arg name="task_node_type" default="owner_voice_reid_test.py" />
+  <arg name="task_node_name" default="owner_voice_reid_test" />
   <arg name="start_asr" default="true" />
   <arg name="start_tts" default="true" />
   <arg name="start_sound_play" default="true" />
@@ -201,8 +203,8 @@
     </include>
   </group>
 
-  <node pkg="wpb_task1_owner_search" type="owner_voice_reid_test.py"
-        name="owner_voice_reid_test" output="screen">
+  <node pkg="wpb_task1_owner_search" type="$(arg task_node_type)"
+        name="$(arg task_node_name)" output="screen">
     <param name="image_topic" value="$(arg image_topic)" />
     <param name="detections_topic" value="$(arg detections_topic)" />
     <param name="say_topic" value="$(arg say_topic)" />

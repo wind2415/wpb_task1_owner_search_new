@@ -22,6 +22,7 @@ catkin_package(
 
 catkin_install_python(PROGRAMS
   scripts/owner_voice_reid_test.py
+  scripts/owner_voice_reid_optimized.py
   scripts/person_reid_owner_test.py
   scripts/robot_mic_test.py
   scripts/task1_find_owner_real.py

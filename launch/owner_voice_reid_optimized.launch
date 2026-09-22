@@ -1,0 +1,48 @@
+<launch>
+  <arg name="start_camera" default="true" />
+  <arg name="start_yolo" default="true" />
+  <arg name="start_voice" default="true" />
+  <arg name="start_asr" default="true" />
+  <arg name="start_tts" default="true" />
+  <arg name="start_sound_play" default="true" />
+  <arg name="show_yolo_window" default="true" />
+  <arg name="start_navigation" default="true" />
+  <arg name="start_rviz" default="true" />
+  <arg name="rvizconfig" default="$(find wpb_home_tutorials)/rviz/nav.rviz" />
+  <arg name="map" default="$(find wpb_home_tutorials)/maps/map.yaml" />
+  <arg name="serial_port" default="/dev/ftdi" />
+  <arg name="rplidar_port" default="/dev/rplidar" />
+  <arg name="waypoint_file" default="/home/ubuntu20/waypoints.xml" />
+  <arg name="navigate_enabled" default="true" />
+  <arg name="reuse_existing_profile" default="false" />
+  <arg name="profile_dir" default="$(find wpb_task1_owner_search)/data/reid_owner_voice" />
+  <arg name="action_capture_duration" default="3.0" />
+  <arg name="action_capture_frame_count" default="15" />
+  <arg name="action_llm_frame_count" default="9" />
+
+  <include file="$(find wpb_task1_owner_search)/launch/owner_voice_reid_test.launch">
+    <arg name="task_node_type" value="owner_voice_reid_optimized.py" />
+    <arg name="task_node_name" value="owner_voice_reid_optimized" />
+    <arg name="start_camera" value="$(arg start_camera)" />
+    <arg name="start_yolo" value="$(arg start_yolo)" />
+    <arg name="start_voice" value="$(arg start_voice)" />
+    <arg name="start_asr" value="$(arg start_asr)" />
+    <arg name="start_tts" value="$(arg start_tts)" />
+    <arg name="start_sound_play" value="$(arg start_sound_play)" />
+    <arg name="show_yolo_window" value="$(arg show_yolo_window)" />
+    <arg name="start_navigation" value="$(arg start_navigation)" />
+    <arg name="start_rviz" value="$(arg start_rviz)" />
+    <arg name="rvizconfig" value="$(arg rvizconfig)" />
+    <arg name="map" value="$(arg map)" />
+    <arg name="serial_port" value="$(arg serial_port)" />
+    <arg name="rplidar_port" value="$(arg rplidar_port)" />
+    <arg name="waypoint_file" value="$(arg waypoint_file)" />
+    <arg name="waypoint_name" value="living_room" />
+    <arg name="navigate_enabled" value="$(arg navigate_enabled)" />
+    <arg name="reuse_existing_profile" value="$(arg reuse_existing_profile)" />
+    <arg name="profile_dir" value="$(arg profile_dir)" />
+    <arg name="action_capture_duration" value="$(arg action_capture_duration)" />
+    <arg name="action_capture_frame_count" value="$(arg action_capture_frame_count)" />
+    <arg name="action_llm_frame_count" value="$(arg action_llm_frame_count)" />
+  </include>
+</launch>

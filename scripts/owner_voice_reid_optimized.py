@@ -68,6 +68,15 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         self.return_to_exit_when_complete = bool(
             rospy.get_param("~return_to_exit_when_complete", True)
         )
+        self.optimized_seated_waving_aspect_ratio = max(
+            0.35,
+            float(
+                rospy.get_param(
+                    "~optimized_seated_waving_aspect_ratio",
+                    0.70,
+                )
+            ),
+        )
         if not self.exit_waypoint_name:
             self.exit_waypoint_name = "exit"
 
@@ -292,6 +301,133 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             "lying_ground",
         }
 
+    def is_seated_waving(self, action_result, owner_result):
+        if not isinstance(action_result, dict):
+            return False
+        if str(action_result.get("action", "") or "").strip().lower() != "waving":
+            return False
+
+        place = str(action_result.get("place", "") or "").strip().lower()
+        if place in {"chair", "sofa", "bed"}:
+            return True
+
+        ground_relation = action_result.get("ground_relation")
+        if (
+            isinstance(ground_relation, dict)
+            and str(ground_relation.get("status", "") or "").strip().lower()
+            == "elevated"
+        ):
+            return True
+
+        speech = str(action_result.get("speech", "") or "")
+        if any(marker in speech for marker in ("坐", "椅子", "沙发", "床")):
+            return True
+
+        candidate = owner_result.get("candidate", {}) if isinstance(owner_result, dict) else {}
+        if not isinstance(candidate, dict):
+            return False
+        aspect_ratio = candidate.get("aspect_ratio")
+        if aspect_ratio is None:
+            bbox = candidate.get("bbox")
+            if not bbox or len(bbox) < 4:
+                return False
+            try:
+                width = float(bbox[2]) - float(bbox[0])
+                height = float(bbox[3]) - float(bbox[1])
+                aspect_ratio = width / max(1.0, height)
+            except (TypeError, ValueError):
+                return False
+        try:
+            aspect_ratio = float(aspect_ratio)
+        except (TypeError, ValueError):
+            return False
+        is_not_lying = not bool(candidate.get("lying_pose", False))
+        seated = (
+            aspect_ratio >= self.optimized_seated_waving_aspect_ratio
+            and aspect_ratio < self.lying_aspect_ratio_threshold
+            and is_not_lying
+        )
+        rospy.loginfo(
+            "Optimized waving posture check: aspect=%.3f threshold=%.3f "
+            "lying_pose=%s seated=%s",
+            aspect_ratio,
+            self.optimized_seated_waving_aspect_ratio,
+            bool(candidate.get("lying_pose", False)),
+            seated,
+        )
+        return seated
+
+    def is_probably_seated_waving(self, action_result, owner_result):
+        if self.is_seated_waving(action_result, owner_result):
+            return True
+
+        if not isinstance(action_result, dict):
+            return False
+        ground_relation = action_result.get("ground_relation")
+        if (
+            isinstance(ground_relation, dict)
+            and str(ground_relation.get("status", "") or "").strip().lower()
+            == "elevated"
+        ):
+            return True
+
+        candidate = owner_result.get("candidate", {}) if isinstance(owner_result, dict) else {}
+        if not isinstance(candidate, dict) or bool(candidate.get("lying_pose", False)):
+            return False
+        bbox = candidate.get("bbox")
+        if not bbox or len(bbox) < 4:
+            return False
+        try:
+            width = float(bbox[2]) - float(bbox[0])
+            height = float(bbox[3]) - float(bbox[1])
+            aspect_ratio = width / max(1.0, height)
+        except (TypeError, ValueError):
+            return False
+        return 0.35 <= aspect_ratio < self.lying_aspect_ratio_threshold
+
+    def handle_seated_waving_interaction(self, action_result, owner_result):
+        return self.handle_waving_interaction(action_result, owner_result)
+
+    def handle_waving_interaction(self, action_result, owner_result):
+        self.publish_status(
+            "owner_interaction_started",
+            owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+            action="waving",
+            place=(action_result or {}).get("place", "unknown"),
+            approach_mode="waving",
+        )
+        approached = self.approach_owner(
+            owner_result,
+            self.waving_standoff_distance,
+            waving=True,
+        )
+        if (
+            not approached
+            and "plan" in str(self.last_approach_failure_reason or "").lower()
+            and self.is_probably_seated_waving(action_result, owner_result)
+        ):
+            rospy.logwarn(
+                "Waving approach plan failed for a likely seated owner; "
+                "retrying with sitting approach logic"
+            )
+            approached = self.approach_owner(
+                owner_result,
+                self.approach_standoff_distance,
+                waving=False,
+            )
+        if approached:
+            self.handle_owner_help(owner_result)
+        else:
+            self.speak(self.approach_failed_prompt, wait=True)
+        self.publish_status(
+            "owner_interaction_finished",
+            owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+            action="waving",
+            place=(action_result or {}).get("place", "unknown"),
+            approach_mode="waving",
+            electrical_switch_state=self.electrical_switch_state,
+        )
+
     def handle_owner_action_interaction(self, action_result, owner_result):
         normalized = self.normalize_action_result(action_result)
         if not self.action_result_is_certain(normalized):
@@ -318,6 +454,14 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             action=(normalized or {}).get("action", "unknown"),
             place=(normalized or {}).get("place", "unknown"),
         )
+        if normalized.get("action") == "waving":
+            if self.is_seated_waving(normalized, owner_result):
+                rospy.loginfo(
+                    "Optimized owner action: seated waving detected; using waving approach "
+                    "logic with waving help interaction"
+                )
+                return self.handle_seated_waving_interaction(normalized, owner_result)
+            return self.handle_waving_interaction(normalized, owner_result)
         return super().handle_owner_action_interaction(normalized, owner_result)
 
     def reset_patrol_waypoint_state(self, waypoint_name):

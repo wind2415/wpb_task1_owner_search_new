@@ -100,6 +100,15 @@
   <arg name="front_to_side_record_seconds" default="4.5" />
   <arg name="front_to_side_record_sample_count" default="10" />
   <arg name="front_to_side_record_sample_interval" default="0.35" />
+  <arg name="face_recording_text" default="$(arg front_recording_text)" />
+  <arg name="face_front_to_side_record_seconds" default="$(arg front_to_side_record_seconds)" />
+  <arg name="face_front_to_side_record_sample_count" default="$(arg front_to_side_record_sample_count)" />
+  <arg name="face_front_to_side_record_sample_interval" default="$(arg front_to_side_record_sample_interval)" />
+  <arg name="full_body_recording_text" default="现在请后退一点，确保全身都在画面中，再从正面慢慢转向侧身，我会记录更多全身特征。" />
+  <arg name="full_body_front_to_side_record_seconds" default="8.0" />
+  <arg name="full_body_front_to_side_record_sample_count" default="36" />
+  <arg name="full_body_front_to_side_record_sample_interval" default="0.25" />
+  <arg name="optimized_seated_waving_aspect_ratio" default="0.70" />
 
   <arg name="action_recognition_enabled" default="true" />
   <arg name="action_launch_file" default="/home/ubuntu20/catkin_ws/src/offline_voice_bridge/launch/qwen_action_recognition.launch" />
@@ -281,6 +290,15 @@
     <param name="front_to_side_record_seconds" value="$(arg front_to_side_record_seconds)" />
     <param name="front_to_side_record_sample_count" value="$(arg front_to_side_record_sample_count)" />
     <param name="front_to_side_record_sample_interval" value="$(arg front_to_side_record_sample_interval)" />
+    <param name="face_recording_text" value="$(arg face_recording_text)" />
+    <param name="face_front_to_side_record_seconds" value="$(arg face_front_to_side_record_seconds)" />
+    <param name="face_front_to_side_record_sample_count" value="$(arg face_front_to_side_record_sample_count)" />
+    <param name="face_front_to_side_record_sample_interval" value="$(arg face_front_to_side_record_sample_interval)" />
+    <param name="full_body_recording_text" value="$(arg full_body_recording_text)" />
+    <param name="full_body_front_to_side_record_seconds" value="$(arg full_body_front_to_side_record_seconds)" />
+    <param name="full_body_front_to_side_record_sample_count" value="$(arg full_body_front_to_side_record_sample_count)" />
+    <param name="full_body_front_to_side_record_sample_interval" value="$(arg full_body_front_to_side_record_sample_interval)" />
+    <param name="optimized_seated_waving_aspect_ratio" value="$(arg optimized_seated_waving_aspect_ratio)" />
     <param name="action_recognition_enabled" value="$(arg action_recognition_enabled)" />
     <param name="action_launch_file" value="$(arg action_launch_file)" />
     <param name="action_node_name" value="$(arg action_node_name)" />

@@ -16,6 +16,19 @@
   <arg name="navigate_enabled" default="true" />
   <arg name="reuse_existing_profile" default="false" />
   <arg name="profile_dir" default="$(find wpb_task1_owner_search)/data/reid_owner_voice" />
+  <arg name="front_recording_text" default="请靠近摄像头，保持正脸，然后慢慢转向侧脸，我会连续记录多张人脸特征。" />
+  <arg name="front_to_side_record_seconds" default="8.0" />
+  <arg name="front_to_side_record_sample_count" default="36" />
+  <arg name="front_to_side_record_sample_interval" default="0.25" />
+  <arg name="face_recording_text" default="$(arg front_recording_text)" />
+  <arg name="face_front_to_side_record_seconds" default="$(arg front_to_side_record_seconds)" />
+  <arg name="face_front_to_side_record_sample_count" default="$(arg front_to_side_record_sample_count)" />
+  <arg name="face_front_to_side_record_sample_interval" default="$(arg front_to_side_record_sample_interval)" />
+  <arg name="full_body_recording_text" default="现在请后退一点，确保全身都在画面中，再从正面慢慢转向侧身，我会记录更多全身特征。" />
+  <arg name="full_body_front_to_side_record_seconds" default="8.0" />
+  <arg name="full_body_front_to_side_record_sample_count" default="36" />
+  <arg name="full_body_front_to_side_record_sample_interval" default="0.25" />
+  <arg name="optimized_seated_waving_aspect_ratio" default="0.55" />
   <arg name="action_capture_duration" default="3.0" />
   <arg name="action_capture_frame_count" default="15" />
   <arg name="action_llm_frame_count" default="9" />
@@ -41,6 +54,19 @@
     <arg name="navigate_enabled" value="$(arg navigate_enabled)" />
     <arg name="reuse_existing_profile" value="$(arg reuse_existing_profile)" />
     <arg name="profile_dir" value="$(arg profile_dir)" />
+    <arg name="front_recording_text" value="$(arg front_recording_text)" />
+    <arg name="front_to_side_record_seconds" value="$(arg front_to_side_record_seconds)" />
+    <arg name="front_to_side_record_sample_count" value="$(arg front_to_side_record_sample_count)" />
+    <arg name="front_to_side_record_sample_interval" value="$(arg front_to_side_record_sample_interval)" />
+    <arg name="face_recording_text" value="$(arg face_recording_text)" />
+    <arg name="face_front_to_side_record_seconds" value="$(arg face_front_to_side_record_seconds)" />
+    <arg name="face_front_to_side_record_sample_count" value="$(arg face_front_to_side_record_sample_count)" />
+    <arg name="face_front_to_side_record_sample_interval" value="$(arg face_front_to_side_record_sample_interval)" />
+    <arg name="full_body_recording_text" value="$(arg full_body_recording_text)" />
+    <arg name="full_body_front_to_side_record_seconds" value="$(arg full_body_front_to_side_record_seconds)" />
+    <arg name="full_body_front_to_side_record_sample_count" value="$(arg full_body_front_to_side_record_sample_count)" />
+    <arg name="full_body_front_to_side_record_sample_interval" value="$(arg full_body_front_to_side_record_sample_interval)" />
+    <arg name="optimized_seated_waving_aspect_ratio" value="$(arg optimized_seated_waving_aspect_ratio)" />
     <arg name="action_capture_duration" value="$(arg action_capture_duration)" />
     <arg name="action_capture_frame_count" value="$(arg action_capture_frame_count)" />
     <arg name="action_llm_frame_count" value="$(arg action_llm_frame_count)" />

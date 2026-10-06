@@ -123,8 +123,8 @@ class PersonReidOwnerTest:
             self.match_required_consecutive,
             int(rospy.get_param("~lying_required_consecutive", 3)),
         )
-        self.lying_reid_weight = max(0.0, float(rospy.get_param("~lying_reid_weight", 0.75)))
-        self.lying_color_weight = max(0.0, float(rospy.get_param("~lying_color_weight", 0.25)))
+        self.lying_reid_weight = max(0.0, float(rospy.get_param("~lying_reid_weight", 1.0)))
+        self.lying_color_weight = max(0.0, float(rospy.get_param("~lying_color_weight", 0.0)))
 
         self.say_wait_for_subscribers = bool(rospy.get_param("~say_wait_for_subscribers", True))
         self.say_wait_timeout = float(rospy.get_param("~say_wait_timeout", 15.0))

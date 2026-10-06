@@ -2,6 +2,7 @@
 # coding=utf-8
 
 import json
+import math
 import os
 import sys
 import threading
@@ -38,6 +39,25 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
 
     def __init__(self):
         super().__init__()
+
+        self.optimized_waving_lidar_guard_distance = max(
+            0.05,
+            float(
+                rospy.get_param(
+                    "~optimized_waving_lidar_guard_distance",
+                    0.20,
+                )
+            ),
+        )
+        self.approach_debug_logging_enabled = bool(
+            rospy.get_param("~approach_debug_logging_enabled", True)
+        )
+        self.approach_debug_tick_log_period = max(
+            0.2,
+            float(rospy.get_param("~approach_debug_tick_log_period", 1.0)),
+        )
+        self.approach_debug_sequence = 0
+        self.approach_debug_started_at = None
 
         self.workflow_state_topic = str(
             rospy.get_param(
@@ -76,6 +96,26 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
                     0.70,
                 )
             ),
+        )
+        self.seated_waving_two_stage_enabled = bool(
+            rospy.get_param("~seated_waving_two_stage_enabled", True)
+        )
+        self.seated_waving_coarse_standoff_distance = max(
+            self.waving_approach_safety_radius + 0.20,
+            float(
+                rospy.get_param(
+                    "~seated_waving_coarse_standoff_distance",
+                    1.00,
+                )
+            ),
+        )
+        self.seated_waving_refine_timeout = max(
+            0.5,
+            float(rospy.get_param("~seated_waving_refine_timeout", 3.0)),
+        )
+        self.seated_waving_refine_required_matches = max(
+            1,
+            int(rospy.get_param("~seated_waving_refine_required_matches", 2)),
         )
         if not self.exit_waypoint_name:
             self.exit_waypoint_name = "exit"
@@ -123,6 +163,150 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         self.current_action_result = None
         self.patrol_results = []
         rospy.on_shutdown(self.stop_workflow_watchdog)
+
+    @staticmethod
+    def _approach_debug_value(value):
+        if isinstance(value, dict):
+            return {
+                str(key): OptimizedOwnerVoiceReid._approach_debug_value(item)
+                for key, item in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [
+                OptimizedOwnerVoiceReid._approach_debug_value(item)
+                for item in value
+            ]
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                return str(value)
+            return round(value, 4)
+        if isinstance(value, (str, int, bool)) or value is None:
+            return value
+        return str(value)
+
+    def approach_debug_event(self, event, **fields):
+        if not getattr(self, "approach_debug_logging_enabled", False):
+            return
+
+        try:
+            payload = {
+                "event": str(event),
+                "sequence": int(getattr(self, "approach_debug_sequence", 0)),
+            }
+            safe_fields = {
+                str(key): self._approach_debug_value(value)
+                for key, value in fields.items()
+            }
+            payload.update(safe_fields)
+            message = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+            is_failure = fields.get("success") is False
+            if event == "navigation_tick":
+                rospy.loginfo_throttle(
+                    self.approach_debug_tick_log_period,
+                    "[optimized waving approach] %s",
+                    message,
+                )
+            elif is_failure:
+                rospy.logwarn("[optimized waving approach] %s", message)
+            else:
+                rospy.loginfo("[optimized waving approach] %s", message)
+
+            if event != "navigation_tick" and hasattr(self, "workflow_state_pub"):
+                self.publish_workflow_state(
+                    "approach_debug",
+                    approach_event=str(event),
+                    **safe_fields
+                )
+        except Exception as exc:
+            rospy.logwarn_throttle(
+                5.0,
+                "Optimized approach diagnostic logging failed: %s",
+                exc,
+            )
+
+    def approach_owner(
+        self,
+        owner_result,
+        standoff_distance,
+        waving=False,
+        lidar_guard_distance_override=None,
+    ):
+        self.approach_debug_sequence += 1
+        self.approach_debug_started_at = time.time()
+        candidate = (
+            owner_result.get("candidate", {})
+            if isinstance(owner_result, dict)
+            else {}
+        )
+        if not isinstance(candidate, dict):
+            candidate = {}
+        effective_lidar_guard_distance = (
+            self.optimized_waving_lidar_guard_distance
+            if waving
+            else lidar_guard_distance_override
+        )
+        self.approach_debug_event(
+            "approach_started",
+            waving=bool(waving),
+            standoff_distance=float(standoff_distance),
+            owner_index=(owner_result or {}).get("owner_index")
+            if isinstance(owner_result, dict)
+            else None,
+            owner_name=(owner_result or {}).get("owner_name", "")
+            if isinstance(owner_result, dict)
+            else "",
+            owner_score=(owner_result or {}).get("score")
+            if isinstance(owner_result, dict)
+            else None,
+            candidate_bbox=candidate.get("bbox"),
+            candidate_aspect_ratio=candidate.get("aspect_ratio"),
+            lidar_guard_distance_override=effective_lidar_guard_distance,
+        )
+        try:
+            approached = super().approach_owner(
+                owner_result,
+                standoff_distance,
+                waving=waving,
+                lidar_guard_distance_override=effective_lidar_guard_distance,
+            )
+        except Exception as exc:
+            self.approach_debug_event(
+                "approach_exception",
+                waving=bool(waving),
+                elapsed_sec=time.time() - self.approach_debug_started_at,
+                exception=str(exc),
+                failure_reason=getattr(self, "last_approach_failure_reason", ""),
+            )
+            raise
+
+        self.approach_debug_event(
+            "approach_finished",
+            waving=bool(waving),
+            success=bool(approached),
+            elapsed_sec=time.time() - self.approach_debug_started_at,
+            failure_reason=getattr(self, "last_approach_failure_reason", ""),
+        )
+        return approached
+
+    def estimate_owner_position_from_pointcloud(self, owner_result):
+        position = super().estimate_owner_position_from_pointcloud(owner_result)
+        if position is None:
+            self.approach_debug_event(
+                "owner_position_estimated",
+                success=False,
+                reason=getattr(self, "pointcloud_reason", ""),
+            )
+        else:
+            self.approach_debug_event(
+                "owner_position_estimated",
+                success=True,
+                position={
+                    key: position.get(key)
+                    for key in ("x", "y", "z", "distance", "forward", "lateral")
+                    if key in position
+                },
+            )
+        return position
 
     @staticmethod
     def parse_waypoint_names(value):
@@ -385,10 +569,159 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             return False
         return 0.35 <= aspect_ratio < self.lying_aspect_ratio_threshold
 
-    def handle_seated_waving_interaction(self, action_result, owner_result):
-        return self.handle_waving_interaction(action_result, owner_result)
+    def handle_waving_two_stage_interaction(self, action_result, owner_result):
+        if not self.seated_waving_two_stage_enabled:
+            return self.handle_waving_interaction(action_result, owner_result)
+
+        self.approach_debug_event(
+            "waving_interaction_started",
+            mode="waving_two_stage",
+            place=(action_result or {}).get("place", "unknown"),
+            action=(action_result or {}).get("action", "waving"),
+        )
+        self.publish_status(
+            "owner_interaction_started",
+            owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+            action="waving",
+            place=(action_result or {}).get("place", "unknown"),
+            approach_mode="waving_two_stage",
+            approach_stage="coarse",
+        )
+        rospy.loginfo(
+            "Waving approach stage 1/2: coarse standoff=%.2fm",
+            self.seated_waving_coarse_standoff_distance,
+        )
+        coarse_approached = self.approach_owner(
+            owner_result,
+            self.seated_waving_coarse_standoff_distance,
+            waving=False,
+        )
+        if not coarse_approached:
+            self.speak(self.approach_failed_prompt, wait=True)
+            self.approach_debug_event(
+                "waving_interaction_finished",
+                success=False,
+                stage="coarse_failed",
+                failure_reason=getattr(self, "last_approach_failure_reason", ""),
+            )
+            self.publish_status(
+                "owner_interaction_finished",
+                owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+                action="waving",
+                place=(action_result or {}).get("place", "unknown"),
+                approach_mode="waving_two_stage",
+                approach_stage="coarse_failed",
+                electrical_switch_state=self.electrical_switch_state,
+            )
+            return False
+
+        refined_owner_result = self.refresh_owner_result_for_precise_approach(
+            owner_result
+        )
+        self.publish_status(
+            "owner_interaction_stage",
+            owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+            action="waving",
+            approach_mode="waving_two_stage",
+            approach_stage="precise",
+        )
+        rospy.loginfo(
+            "Waving approach stage 2/2: refreshing YOLO detection "
+            "and estimating point-cloud position"
+        )
+        approached = self.approach_owner(
+            refined_owner_result,
+            self.waving_standoff_distance,
+            waving=True,
+        )
+        if approached:
+            self.handle_owner_help(refined_owner_result)
+        else:
+            self.speak(self.approach_failed_prompt, wait=True)
+        self.approach_debug_event(
+            "waving_interaction_finished",
+            success=bool(approached),
+            stage="precise_finished" if approached else "precise_failed",
+            failure_reason=getattr(self, "last_approach_failure_reason", ""),
+        )
+        self.publish_status(
+            "owner_interaction_finished",
+            owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+            action="waving",
+            place=(action_result or {}).get("place", "unknown"),
+            approach_mode="waving_two_stage",
+            approach_stage="precise_finished" if approached else "precise_failed",
+            electrical_switch_state=self.electrical_switch_state,
+        )
+        return approached
+
+    def refresh_owner_result_for_precise_approach(self, owner_result):
+        if not isinstance(owner_result, dict):
+            return owner_result
+
+        expected_owner_index = owner_result.get("owner_index")
+        last_result = None
+        consecutive_matches = 0
+        deadline = time.time() + self.seated_waving_refine_timeout
+        rate = rospy.Rate(10)
+        while not rospy.is_shutdown() and time.time() < deadline:
+            result = self.evaluate_current_frame()
+            if result is not None and self.result_is_match(
+                result,
+                self.match_threshold,
+            ):
+                result_owner_index = result.get("owner_index")
+                if (
+                    expected_owner_index is not None
+                    and result_owner_index is not None
+                    and result_owner_index != expected_owner_index
+                ):
+                    rate.sleep()
+                    continue
+                last_result = result
+                consecutive_matches += 1
+                if consecutive_matches >= self.seated_waving_refine_required_matches:
+                    break
+            else:
+                consecutive_matches = 0
+            rate.sleep()
+
+        if last_result is not None:
+            updated_result = dict(owner_result)
+            updated_candidate = dict(owner_result.get("candidate", {}))
+            updated_candidate.update(last_result.get("candidate", {}))
+            updated_result["candidate"] = updated_candidate
+            for key in (
+                "score",
+                "identity_score",
+                "reid_score",
+                "face_score",
+                "owner_score_margin",
+            ):
+                if key in last_result:
+                    updated_result[key] = last_result[key]
+            rospy.loginfo(
+                "Refreshed waving owner detection for precise approach: "
+                "bbox=%s score=%s",
+                updated_candidate.get("bbox"),
+                updated_result.get("score"),
+            )
+            return updated_result
+
+        self.center_owner_in_camera(owner_result)
+        rospy.logwarn(
+            "Could not obtain a consecutive refreshed owner Re-ID result; "
+            "using the latest YOLO tracking box for point-cloud refinement"
+        )
+        return owner_result
 
     def handle_waving_interaction(self, action_result, owner_result):
+        self.approach_debug_event(
+            "waving_interaction_started",
+            mode="waving",
+            place=(action_result or {}).get("place", "unknown"),
+            action=(action_result or {}).get("action", "waving"),
+        )
         self.publish_status(
             "owner_interaction_started",
             owner_name=(owner_result or {}).get("owner_name", self.owner_name),
@@ -419,6 +752,12 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             self.handle_owner_help(owner_result)
         else:
             self.speak(self.approach_failed_prompt, wait=True)
+        self.approach_debug_event(
+            "waving_interaction_finished",
+            success=bool(approached),
+            stage="finished" if approached else "failed",
+            failure_reason=getattr(self, "last_approach_failure_reason", ""),
+        )
         self.publish_status(
             "owner_interaction_finished",
             owner_name=(owner_result or {}).get("owner_name", self.owner_name),
@@ -448,20 +787,36 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
                 recognizer=(normalized or {}).get("recognizer", "unknown"),
             )
             return None
+        action = normalized.get("action")
+        if action in {"sitting", "lying"}:
+            rospy.loginfo(
+                "Optimized owner action: skipping interaction for non-interactive action %s",
+                action,
+            )
+            self.publish_workflow_state(
+                "interaction_skipped",
+                reason="optimized_non_interactive_action",
+                action=action,
+                place=normalized.get("place", "unknown"),
+            )
+            super().publish_status(
+                "owner_interaction_skipped",
+                reason="optimized_non_interactive_action",
+                owner_index=(owner_result or {}).get("owner_index"),
+                owner_name=(owner_result or {}).get("owner_name", self.owner_name),
+                action=action,
+                place=normalized.get("place", "unknown"),
+                recognizer=normalized.get("recognizer", "unknown"),
+            )
+            return None
         self.set_workflow_state(
             WorkflowState.INTERACT,
             reason="action_result_received",
-            action=(normalized or {}).get("action", "unknown"),
-            place=(normalized or {}).get("place", "unknown"),
+            action=action or "unknown",
+            place=normalized.get("place", "unknown"),
         )
-        if normalized.get("action") == "waving":
-            if self.is_seated_waving(normalized, owner_result):
-                rospy.loginfo(
-                    "Optimized owner action: seated waving detected; using waving approach "
-                    "logic with waving help interaction"
-                )
-                return self.handle_seated_waving_interaction(normalized, owner_result)
-            return self.handle_waving_interaction(normalized, owner_result)
+        if action == "waving":
+            return self.handle_waving_two_stage_interaction(normalized, owner_result)
         return super().handle_owner_action_interaction(normalized, owner_result)
 
     def reset_patrol_waypoint_state(self, waypoint_name):

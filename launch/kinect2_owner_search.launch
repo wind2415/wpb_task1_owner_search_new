@@ -23,6 +23,13 @@
   <arg name="start_qhd_points" default="true" />
 
   <node pkg="nodelet" type="nodelet" name="$(arg base_name)" args="manager" output="screen" />
+  <node pkg="nodelet"
+        type="nodelet"
+        name="$(arg base_name)_points_manager"
+        args="manager"
+        respawn="true"
+        respawn_delay="1.0"
+        output="screen" />
 
   <node pkg="nodelet" type="nodelet" name="$(arg base_name)_bridge"
         args="load kinect2_bridge/kinect2_bridge_nodelet $(arg base_name)"
@@ -49,7 +56,7 @@
   </node>
 
   <node if="$(arg start_qhd_points)" pkg="nodelet" type="nodelet" name="$(arg base_name)_points_xyzrgb_qhd"
-        args="load depth_image_proc/point_cloud_xyzrgb $(arg base_name)" respawn="$(arg respawn)" output="$(arg output)">
+        args="load depth_image_proc/point_cloud_xyzrgb $(arg base_name)_points_manager" respawn="$(arg respawn)" output="$(arg output)">
     <remap from="rgb/camera_info" to="$(arg base_name)/qhd/camera_info" />
     <remap from="rgb/image_rect_color" to="$(arg base_name)/qhd/image_color_rect" />
     <remap from="depth_registered/image_rect" to="$(arg base_name)/qhd/image_depth_rect" />

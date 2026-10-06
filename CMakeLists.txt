@@ -23,6 +23,8 @@ catkin_package(
 catkin_install_python(PROGRAMS
   scripts/owner_voice_reid_test.py
   scripts/owner_voice_reid_optimized.py
+  scripts/offline_asr_endpoint_node.py
+  scripts/yolopose_async.py
   scripts/person_reid_owner_test.py
   scripts/robot_mic_test.py
   scripts/task1_find_owner_real.py

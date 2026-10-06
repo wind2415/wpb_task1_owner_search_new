@@ -64,14 +64,14 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             )
         ).strip()
         self.help_llm_model = str(
-            rospy.get_param("~help_llm_model", "qwen3.5:2b")
-        ).strip()
+            rospy.get_param("~help_llm_model", "qwen3.5:0.8b")
+        ).strip() or "qwen3.5:0.8b"
         self.help_llm_timeout = max(
             1.0,
             float(rospy.get_param("~help_llm_timeout", 60.0)),
         )
         self.help_llm_keep_alive = str(
-            rospy.get_param("~help_llm_keep_alive", "10m")
+            rospy.get_param("~help_llm_keep_alive", "30m")
         ).strip()
         self.help_llm_max_tokens = max(
             16,
@@ -79,7 +79,22 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         )
         self.help_llm_num_ctx = max(
             512,
-            int(rospy.get_param("~help_llm_num_ctx", 2048)),
+            int(rospy.get_param("~help_llm_num_ctx", 4096)),
+        )
+        self.help_llm_num_gpu = max(
+            0,
+            int(rospy.get_param("~help_llm_num_gpu", 0)),
+        )
+        self.help_llm_warmup_enabled = bool(
+            rospy.get_param("~help_llm_warmup_enabled", True)
+        )
+        self.help_llm_warmup_retries = max(
+            1,
+            int(rospy.get_param("~help_llm_warmup_retries", 2)),
+        )
+        self.help_llm_warmup_retry_delay = max(
+            0.0,
+            float(rospy.get_param("~help_llm_warmup_retry_delay", 2.0)),
         )
         self.strict_rephrase = bool(
             rospy.get_param("~strict_rephrase", False)
@@ -167,6 +182,12 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             0.2,
             float(rospy.get_param("~action_speech_grace", 1.0)),
         )
+        self.action_lying_bed_speech = str(
+            rospy.get_param(
+                "~action_lying_bed_speech",
+                "主人正躺在床上。",
+            )
+        ).strip() or "主人正躺在床上。"
         self.action_show_window = bool(
             rospy.get_param("~action_show_window", False)
         )
@@ -177,8 +198,8 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             )
         ).strip()
         self.action_llm_model = str(
-            rospy.get_param("~action_llm_model", "qwen3.5:2b")
-        ).strip()
+            rospy.get_param("~action_llm_model", "qwen3.5:0.8b")
+        ).strip() or "qwen3.5:0.8b"
         self.action_pointcloud_enabled = bool(
             rospy.get_param("~action_pointcloud_enabled", False)
         )
@@ -290,6 +311,19 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         self.points_topic = str(
             rospy.get_param("~points_topic", "/kinect2/qhd/points")
         ).strip()
+        self.pointcloud_nodelet_manager = str(
+            rospy.get_param("~pointcloud_nodelet_manager", "/kinect2_points_manager")
+        ).rstrip("/")
+        self.pointcloud_nodelet_name = str(
+            rospy.get_param("~pointcloud_nodelet_name", "kinect2_points_xyzrgb_qhd")
+        )
+        self.pointcloud_nodelet_loaded_param = "%s/%s_loaded" % (
+            self.pointcloud_nodelet_manager,
+            self.pointcloud_nodelet_name,
+        )
+        self.pointcloud_nodelet_timeout = max(
+            0.1, float(rospy.get_param("~pointcloud_nodelet_timeout", 3.0))
+        )
         self.pointcloud_max_age = max(
             0.1,
             float(rospy.get_param("~pointcloud_max_age", 1.0)),
@@ -515,7 +549,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         self.fall_approach_lidar_stop_distance = float(
             rospy.get_param(
                 "~fall_approach_lidar_stop_distance",
-                self.approach_lidar_stop_distance,
+                0.22,
             )
         )
         self.fall_approach_lidar_margin = float(
@@ -674,11 +708,15 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
 
         self.name_prompt_text = rospy.get_param(
             "~name_prompt_text",
-            "请说姓名",
+            "请按照姓名加名字的格式说出姓名，例如姓名张三。",
         )
         self.indexed_name_prompt_text = rospy.get_param(
             "~indexed_name_prompt_text",
-            "请说第%s位主人的姓名。",
+            "请第%s位主人按照姓名加名字的格式说出姓名，例如姓名张三。",
+        )
+        self.name_confirm_prompt_text = rospy.get_param(
+            "~name_confirm_prompt_text",
+            "姓名%s是否正确？正确请说正确，错误请重说。",
         )
         self.name_retry_text = rospy.get_param(
             "~name_retry_text",
@@ -699,7 +737,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         )
         self.first_owner_skip_text = rospy.get_param(
             "~first_owner_skip_text",
-            "第一位主人不能跳过，请说姓名。",
+            "第一位主人不能跳过，请按照姓名加名字的格式说出姓名，例如姓名张三。",
         )
         self.asr_not_ready_text = rospy.get_param(
             "~asr_not_ready_text",
@@ -847,6 +885,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             self.latest_help_answer = None
             self.accepting_help_answer = False
 
+        self.stop_navigation_for_interaction()
         self.speak(self.approach_help_prompt, wait=True)
         if self.asr_settle_seconds > 0.0:
             rospy.sleep(self.asr_settle_seconds)
@@ -977,19 +1016,15 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             "model": self.help_llm_model,
             "stream": False,
             "think": False,
-            "format": {
-                "type": "object",
-                "properties": {"reply": {"type": "string"}},
-                "required": ["reply"],
-                "additionalProperties": False,
-            },
+            "format": "json",
             "keep_alive": self.help_llm_keep_alive,
             "messages": [{"role": "user", "content": prompt}],
             "options": {
                 "temperature": 0,
-                "top_p": 0.1,
+                "top_p": 0.7,
                 "num_predict": self.help_llm_max_tokens,
                 "num_ctx": self.help_llm_num_ctx,
+                "num_gpu": self.help_llm_num_gpu,
             },
         }
         request = urllib.request.Request(
@@ -1030,6 +1065,40 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         if not rephrase:
             raise RuntimeError("Qwen 没有返回有效机器人回复")
         return rephrase, time.time() - started
+
+    def warmup_help_qwen(self):
+        if not self.help_llm_warmup_enabled:
+            return True
+
+        for attempt in range(1, self.help_llm_warmup_retries + 1):
+            if rospy.is_shutdown():
+                return False
+            try:
+                rephrase, elapsed = self.call_help_qwen(
+                    "这是启动预热，不是用户指令。请回复：好的，我已准备好。"
+                )
+                rospy.loginfo(
+                    "Qwen voice warm-up complete: model=%s seconds=%.2f reply=%s",
+                    self.help_llm_model,
+                    elapsed,
+                    rephrase,
+                )
+                return True
+            except Exception as exc:
+                if attempt >= self.help_llm_warmup_retries:
+                    rospy.logwarn(
+                        "Qwen voice warm-up failed; continuing with runtime fallback: %s",
+                        exc,
+                    )
+                    return False
+                rospy.logwarn(
+                    "Qwen voice warm-up attempt %d failed: %s; retrying in %.1fs",
+                    attempt,
+                    exc,
+                    self.help_llm_warmup_retry_delay,
+                )
+                rospy.sleep(self.help_llm_warmup_retry_delay)
+        return False
 
     @staticmethod
     def fallback_help_reply():
@@ -1136,6 +1205,48 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             self.latest_pointcloud = message
             self.pointcloud_time = time.time()
 
+    def ensure_pointcloud_nodelet(self):
+        if rospy.get_param(self.pointcloud_nodelet_loaded_param, False):
+            return True
+
+        from nodelet.srv import NodeletLoad
+
+        service_name = self.pointcloud_nodelet_manager + "/load_nodelet"
+        rospy.wait_for_service(service_name, timeout=self.pointcloud_nodelet_timeout)
+        request = NodeletLoad._request_class()
+        request.name = self.pointcloud_nodelet_name
+        request.type = "depth_image_proc/point_cloud_xyzrgb"
+        request.remap_source_args = [
+            "rgb/camera_info",
+            "rgb/image_rect_color",
+            "depth_registered/image_rect",
+            "depth_registered/points",
+        ]
+        request.remap_target_args = [
+            "/kinect2/qhd/camera_info",
+            "/kinect2/qhd/image_color_rect",
+            "/kinect2/qhd/image_depth_rect",
+            self.points_topic,
+        ]
+        response = rospy.ServiceProxy(service_name, NodeletLoad)(request)
+        if not response.success:
+            raise RuntimeError(response.error or "point-cloud nodelet load failed")
+        rospy.set_param(self.pointcloud_nodelet_loaded_param, True)
+        return True
+
+    def wait_for_fresh_pointcloud(self):
+        with self.lock:
+            self.latest_pointcloud = None
+            self.pointcloud_time = None
+        deadline = time.time() + self.pointcloud_nodelet_timeout
+        while not rospy.is_shutdown() and time.time() < deadline:
+            with self.lock:
+                pointcloud = self.latest_pointcloud
+            if pointcloud is not None:
+                return True
+            rospy.sleep(0.05)
+        return False
+
     def scan_callback(self, message):
         with self.lock:
             self.latest_scan = message
@@ -1206,8 +1317,12 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "node_name:=%s" % self.action_node_name,
                 "image_topic:=%s" % self.image_topic,
                 "points_topic:=%s" % self.points_topic,
+                "pointcloud_nodelet_manager:=%s" % self.pointcloud_nodelet_manager,
+                "pointcloud_nodelet_name:=%s" % self.pointcloud_nodelet_name,
+                "pointcloud_wait_timeout:=%.3f" % self.pointcloud_nodelet_timeout,
                 "say_topic:=%s" % self.say_topic,
                 "result_topic:=%s" % self.action_result_topic,
+                "lying_bed_speech:=%s" % self.action_lying_bed_speech,
                 "show_window:=%s" % self.roslaunch_bool(self.action_show_window),
                 "auto_analyze:=true",
                 "auto_repeat_seconds:=0.0",
@@ -1711,6 +1826,9 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             float(goal.target_pose.pose.position.y) - robot_pose[1],
         )
 
+    def approach_debug_event(self, event, **fields):
+        return None
+
     def send_approach_navigation_goal(
         self,
         goal,
@@ -1723,6 +1841,16 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         early_stop_owner_distance=None,
     ):
         self.move_base.send_goal(goal)
+        self.approach_debug_event(
+            "navigation_goal_sent",
+            label=label,
+            move_distance=float(move_distance),
+            goal_frame=goal.target_pose.header.frame_id,
+            goal_x=float(goal.target_pose.pose.position.x),
+            goal_y=float(goal.target_pose.pose.position.y),
+            goal_orientation_z=float(goal.target_pose.pose.orientation.z),
+            goal_orientation_w=float(goal.target_pose.pose.orientation.w),
+        )
         start_xy = self.wait_for_odom_xy(timeout=0.5)
         deadline = time.time() + max(
             0.1,
@@ -1757,14 +1885,18 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 last_progress_time = time.time()
 
             owner_distance = None
-            if early_stop_owner_xy is not None and early_stop_owner_distance is not None:
+            if early_stop_owner_xy is not None:
                 robot_pose = self.lookup_robot_navigation_pose()
                 if robot_pose is not None:
                     owner_distance = math.hypot(
                         float(early_stop_owner_xy[0]) - robot_pose[0],
                         float(early_stop_owner_xy[1]) - robot_pose[1],
                     )
-                    if owner_distance <= float(early_stop_owner_distance):
+                    if (
+                        early_stop_owner_xy is not None
+                        and early_stop_owner_distance is not None
+                        and owner_distance <= float(early_stop_owner_distance)
+                    ):
                         self.move_base.cancel_goal()
                         self.stop_base()
                         rospy.loginfo(
@@ -1789,6 +1921,13 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                     elif time.time() - still_since >= float(stop_still_duration):
                         self.move_base.cancel_goal()
                         self.stop_base()
+                        self.approach_debug_event(
+                            "navigation_goal_finished",
+                            label=label,
+                            success=True,
+                            reason="stationary_near_target",
+                            remaining=remaining,
+                        )
                         return True, ""
                 else:
                     still_since = None
@@ -1796,6 +1935,13 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             if remaining is not None and remaining <= self.approach_navigation_min_distance:
                 self.move_base.cancel_goal()
                 self.stop_base()
+                self.approach_debug_event(
+                    "navigation_goal_finished",
+                    label=label,
+                    success=True,
+                    reason="minimum_goal_distance",
+                    remaining=remaining,
+                )
                 return True, ""
 
             if state == GoalStatus.SUCCEEDED:
@@ -1805,12 +1951,28 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 )
                 if remaining is None or remaining <= tolerance:
                     self.stop_base()
+                    self.approach_debug_event(
+                        "navigation_goal_finished",
+                        label=label,
+                        success=True,
+                        reason="move_base_succeeded",
+                        remaining=remaining,
+                        tolerance=tolerance,
+                    )
                     return True, ""
                 self.stop_base()
-                return False, (
+                failure_reason = (
                     "%s reported success before reaching the approach goal: remaining=%.2f"
                     % (label, remaining)
                 )
+                self.approach_debug_event(
+                    "navigation_goal_finished",
+                    label=label,
+                    success=False,
+                    reason=failure_reason,
+                    remaining=remaining,
+                )
+                return False, failure_reason
 
             if state in (
                 GoalStatus.PREEMPTED,
@@ -1831,25 +1993,89 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                         label,
                         owner_distance,
                     )
+                    self.approach_debug_event(
+                        "navigation_goal_finished",
+                        label=label,
+                        success=True,
+                        reason="move_base_failed_inside_owner_safety_circle",
+                        state=int(state),
+                        owner_distance=owner_distance,
+                    )
                     return True, ""
                 self.stop_base()
-                return False, "%s failed with move_base state %s" % (label, state)
+                failure_reason = "%s failed with move_base state %s" % (label, state)
+                self.approach_debug_event(
+                    "navigation_goal_finished",
+                    label=label,
+                    success=False,
+                    reason=failure_reason,
+                    state=int(state),
+                    owner_distance=owner_distance,
+                )
+                return False, failure_reason
 
             if lidar_guard_distance is not None:
                 front_distance = self.front_scan_distance()
                 if front_distance is None:
                     self.move_base.cancel_goal()
                     self.stop_base()
-                    return False, "%s stopped because lidar data is unavailable or stale" % label
+                    failure_reason = "%s stopped because lidar data is unavailable or stale" % label
+                    self.approach_debug_event(
+                        "navigation_goal_finished",
+                        label=label,
+                        success=False,
+                        reason=failure_reason,
+                    )
+                    return False, failure_reason
                 if front_distance <= lidar_guard_distance:
                     self.move_base.cancel_goal()
                     self.stop_base()
-                    if remaining is not None and remaining <= self.approach_slow_finish_tolerance:
+                    if label.startswith("waving owner approach"):
+                        rospy.loginfo(
+                            "%s stopped by obstacle protection at %.2fm; "
+                            "treating waving approach as successful",
+                            label,
+                            front_distance,
+                        )
+                        self.approach_debug_event(
+                            "navigation_goal_finished",
+                            label=label,
+                            success=True,
+                            reason="lidar_obstacle_protection_for_waving",
+                            front_distance=front_distance,
+                            lidar_guard_distance=lidar_guard_distance,
+                        )
                         return True, ""
-                    return False, (
-                        "%s blocked by close obstacle: lidar=%.2f guard=%.2f"
-                        % (label, front_distance, lidar_guard_distance)
+                    if owner_distance is None:
+                        failure_reason = "%s blocked by close obstacle: lidar=%.2f guard=%.2f" % (
+                            label,
+                            front_distance,
+                            lidar_guard_distance,
+                        )
+                        self.approach_debug_event(
+                            "navigation_goal_finished",
+                            label=label,
+                            success=False,
+                            reason=failure_reason,
+                            front_distance=front_distance,
+                            lidar_guard_distance=lidar_guard_distance,
+                        )
+                        return False, failure_reason
+                    failure_reason = (
+                        "%s blocked by close obstacle: lidar=%.2f guard=%.2f "
+                        "owner_distance=%.2f"
+                        % (label, front_distance, lidar_guard_distance, owner_distance)
                     )
+                    self.approach_debug_event(
+                        "navigation_goal_finished",
+                        label=label,
+                        success=False,
+                        reason=failure_reason,
+                        front_distance=front_distance,
+                        lidar_guard_distance=lidar_guard_distance,
+                        owner_distance=owner_distance,
+                    )
+                    return False, failure_reason
 
             if (
                 self.approach_navigation_stuck_timeout > 0.0
@@ -1858,13 +2084,32 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             ):
                 self.move_base.cancel_goal()
                 self.stop_base()
-                return False, (
+                failure_reason = (
                     "%s stuck or blocked before target: remaining=%s"
                     % (
                         label,
                         "%.2f" % remaining if remaining is not None else "unknown",
                     )
                 )
+                self.approach_debug_event(
+                    "navigation_goal_finished",
+                    label=label,
+                    success=False,
+                    reason=failure_reason,
+                    remaining=remaining,
+                    current_speed=current_speed,
+                )
+                return False, failure_reason
+
+            self.approach_debug_event(
+                "navigation_tick",
+                label=label,
+                state=int(state),
+                travelled=travelled,
+                remaining=remaining,
+                current_speed=current_speed,
+                owner_distance=owner_distance,
+            )
 
             self.update_yolo_window(
                 "%s %.2fm" % (label, max(0.0, remaining if remaining is not None else 0.0))
@@ -1887,8 +2132,22 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                         label,
                         owner_distance,
                     )
+                    self.approach_debug_event(
+                        "navigation_goal_finished",
+                        label=label,
+                        success=True,
+                        reason="timeout_inside_owner_safety_circle",
+                        owner_distance=owner_distance,
+                    )
                     return True, ""
-        return False, "move_base timed out while navigating to %s" % label
+        failure_reason = "move_base timed out while navigating to %s" % label
+        self.approach_debug_event(
+            "navigation_goal_finished",
+            label=label,
+            success=False,
+            reason=failure_reason,
+        )
+        return False, failure_reason
 
     def navigate_relative_for_approach(
         self,
@@ -1982,9 +2241,27 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
 
     def waving_goal_has_global_plan(self, goal):
         if not self.waving_approach_plan_check:
+            self.approach_debug_event(
+                "global_plan_check",
+                checked=False,
+                accepted=True,
+                reason="plan_check_disabled",
+                goal_frame=goal.target_pose.header.frame_id,
+                goal_x=float(goal.target_pose.pose.position.x),
+                goal_y=float(goal.target_pose.pose.position.y),
+            )
             return True
         start = self.current_pose_for_plan(goal.target_pose.header.frame_id)
         if start is None:
+            self.approach_debug_event(
+                "global_plan_check",
+                checked=False,
+                accepted=True,
+                reason="robot_pose_unavailable",
+                goal_frame=goal.target_pose.header.frame_id,
+                goal_x=float(goal.target_pose.pose.position.x),
+                goal_y=float(goal.target_pose.pose.position.y),
+            )
             return True
         try:
             rospy.wait_for_service(self.waving_approach_plan_service, timeout=0.3)
@@ -1999,10 +2276,24 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "Cannot check waving owner plan: %s",
                 exc,
             )
+            self.approach_debug_event(
+                "global_plan_check",
+                checked=False,
+                accepted=True,
+                reason="plan_service_unavailable",
+                exception=str(exc),
+            )
             return True
 
         poses = response.plan.poses
         if len(poses) <= 1:
+            self.approach_debug_event(
+                "global_plan_check",
+                checked=True,
+                accepted=False,
+                reason="plan_empty_or_single_pose",
+                plan_pose_count=len(poses),
+            )
             return False
         plan_length = 0.0
         total_turn = 0.0
@@ -2030,12 +2321,32 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             float(goal.target_pose.pose.position.x) - float(start_position.x),
             float(goal.target_pose.pose.position.y) - float(start_position.y),
         )
-        if (
+        detour_rejected = (
             plan_length > max(0.5, direct_distance) * self.waving_approach_plan_detour_ratio
             and plan_length > direct_distance + self.waving_approach_plan_detour_margin
-        ):
-            return False
-        return total_turn <= self.waving_approach_plan_turn_limit
+        )
+        turn_rejected = total_turn > self.waving_approach_plan_turn_limit
+        accepted = not detour_rejected and not turn_rejected
+        self.approach_debug_event(
+            "global_plan_check",
+            checked=True,
+            accepted=accepted,
+            reason=(
+                "detour_too_long"
+                if detour_rejected
+                else "turn_limit_exceeded"
+                if turn_rejected
+                else "plan_accepted"
+            ),
+            plan_pose_count=len(poses),
+            plan_length=plan_length,
+            direct_distance=direct_distance,
+            total_turn=total_turn,
+            detour_ratio_limit=self.waving_approach_plan_detour_ratio,
+            detour_margin_limit=self.waving_approach_plan_detour_margin,
+            turn_limit=self.waving_approach_plan_turn_limit,
+        )
+        return accepted
 
     def waving_owner_standoff_candidates(self, position, standoff_distance):
         owner_x = float(position.get("x", position.get("forward", 0.0)))
@@ -2133,12 +2444,40 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             return False
 
         candidates = self.waving_owner_standoff_candidates(position, standoff_distance)
+        self.approach_debug_event(
+            "waving_candidates_generated",
+            candidate_count=len(candidates),
+            requested_standoff=float(standoff_distance),
+            owner_local_x=float(position.get("x", position.get("forward", 0.0))),
+            owner_local_y=float(position.get("y", position.get("lateral", 0.0))),
+            candidates=[
+                {
+                    "index": index,
+                    "forward": candidate["forward"],
+                    "lateral": candidate["lateral"],
+                    "yaw": candidate["yaw"],
+                    "owner_clearance": candidate["owner_clearance"],
+                    "goal_distance": candidate["goal_distance"],
+                }
+                for index, candidate in enumerate(candidates, start=1)
+            ],
+        )
         if not candidates:
             self.last_approach_failure_reason = "no valid waving owner standoff candidates"
+            self.approach_debug_event(
+                "waving_candidates_finished",
+                success=False,
+                reason=self.last_approach_failure_reason,
+            )
             return False
 
         robot_pose = self.lookup_robot_navigation_pose()
         if robot_pose is None:
+            self.approach_debug_event(
+                "waving_candidates_finished",
+                success=False,
+                reason="robot_navigation_pose_unavailable",
+            )
             return False
         owner_map_xy = self.relative_navigation_xy(
             robot_pose[0],
@@ -2159,6 +2498,13 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 label,
                 current_owner_distance,
             )
+            self.approach_debug_event(
+                "waving_candidates_finished",
+                success=True,
+                reason="already_inside_owner_safety_circle",
+                owner_distance=current_owner_distance,
+                safety_radius=self.waving_approach_safety_radius,
+            )
             return True
         last_error = "no reachable waving owner candidate"
         for index, candidate in enumerate(candidates, start=1):
@@ -2167,10 +2513,37 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 candidate["lateral"],
                 candidate["yaw"],
             )
-            if goal is None or not self.waving_goal_has_global_plan(goal):
+            if goal is None:
+                self.approach_debug_event(
+                    "waving_candidate_rejected",
+                    candidate_index=index,
+                    reason="relative_goal_unavailable",
+                    candidate=candidate,
+                )
+                last_error = "waving owner candidate %d has no relative goal" % index
+                continue
+            plan_accepted = self.waving_goal_has_global_plan(goal)
+            if not plan_accepted:
                 last_error = "waving owner candidate %d has no safe global plan" % index
+                self.approach_debug_event(
+                    "waving_candidate_rejected",
+                    candidate_index=index,
+                    reason="global_plan_rejected",
+                    candidate=candidate,
+                    goal_x=float(goal.target_pose.pose.position.x),
+                    goal_y=float(goal.target_pose.pose.position.y),
+                )
                 continue
             candidate_label = "%s candidate %d" % (label, index)
+            self.approach_debug_event(
+                "waving_candidate_started",
+                candidate_index=index,
+                label=candidate_label,
+                candidate=candidate,
+                goal_x=float(goal.target_pose.pose.position.x),
+                goal_y=float(goal.target_pose.pose.position.y),
+                lidar_guard_distance=lidar_guard_distance,
+            )
             success, error_message = self.send_approach_navigation_goal(
                 goal,
                 candidate["goal_distance"],
@@ -2182,13 +2555,31 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 early_stop_owner_distance=self.waving_approach_safety_radius,
             )
             self.stop_base()
+            self.approach_debug_event(
+                "waving_candidate_finished",
+                candidate_index=index,
+                label=candidate_label,
+                success=bool(success),
+                error_message=error_message,
+            )
             if success:
                 return True
             last_error = error_message or last_error
             if self.waving_approach_retry_after_clear and "obstacle" not in last_error:
+                self.approach_debug_event(
+                    "waving_candidate_costmap_clear",
+                    candidate_index=index,
+                    label=candidate_label,
+                    reason=last_error,
+                )
                 self.clear_move_base_costmaps("after %s failure" % candidate_label)
 
         self.last_approach_failure_reason = last_error
+        self.approach_debug_event(
+            "waving_candidates_finished",
+            success=False,
+            reason=last_error,
+        )
         return False
 
     def navigate_to_owner_standoff(
@@ -2230,12 +2621,40 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             lidar_guard_distance=lidar_guard_distance,
         )
 
-    def approach_owner(self, owner_result, standoff_distance, waving=False):
+    def approach_owner(
+        self,
+        owner_result,
+        standoff_distance,
+        waving=False,
+        lidar_guard_distance_override=None,
+    ):
         if not self.interaction_enabled or not self.approach_enabled:
             rospy.loginfo("Owner approach disabled")
             return True
 
         self.last_approach_failure_reason = ""
+        try:
+            self.ensure_pointcloud_nodelet()
+            if not self.wait_for_fresh_pointcloud():
+                self.pointcloud_reason = "timed out waiting for fresh point cloud"
+                self.last_approach_failure_reason = self.pointcloud_reason
+                self.approach_debug_event(
+                    "approach_precondition_failed",
+                    reason=self.pointcloud_reason,
+                    stage="pointcloud",
+                )
+                return False
+        except Exception as exc:
+            self.pointcloud_reason = "could not start point-cloud nodelet: %s" % exc
+            self.last_approach_failure_reason = self.pointcloud_reason
+            rospy.logwarn(self.last_approach_failure_reason)
+            self.approach_debug_event(
+                "approach_precondition_failed",
+                reason=self.pointcloud_reason,
+                stage="pointcloud_start",
+            )
+            return False
+
         position = self.estimate_owner_position_from_pointcloud(owner_result)
         if position is None:
             self.stop_base()
@@ -2243,19 +2662,35 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "Owner approach cannot start because point-cloud position is invalid: %s",
                 self.pointcloud_reason,
             )
+            self.approach_debug_event(
+                "approach_precondition_failed",
+                reason=self.pointcloud_reason,
+                stage="owner_position",
+            )
             return False
 
         lidar_guard_distance = None
-        if self.approach_navigation_lidar_guard_enabled and not waving:
-            lidar_guard_distance = (
-                self.approach_lidar_stop_distance + self.approach_lidar_margin
-            )
+        if self.approach_navigation_lidar_guard_enabled:
+            if lidar_guard_distance_override is None:
+                lidar_guard_distance = (
+                    self.approach_lidar_stop_distance + self.approach_lidar_margin
+                )
+            else:
+                lidar_guard_distance = max(
+                    0.05,
+                    float(lidar_guard_distance_override),
+                )
             if self.front_scan_distance() is None:
                 self.stop_base()
                 self.last_approach_failure_reason = (
                     "fresh lidar data is required before owner approach"
                 )
                 rospy.logwarn(self.last_approach_failure_reason)
+                self.approach_debug_event(
+                    "approach_precondition_failed",
+                    reason=self.last_approach_failure_reason,
+                    stage="lidar",
+                )
                 return False
         if waving:
             approached = self.navigate_to_waving_owner_candidates(
@@ -2282,6 +2717,11 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         return self.approach_owner(
             owner_result,
             self.fall_approach_standoff_distance,
+            lidar_guard_distance_override=max(
+                0.05,
+                self.fall_approach_lidar_stop_distance
+                + self.fall_approach_lidar_margin,
+            ),
         )
 
     def publish_manipulator_command(self, lift, gripper):
@@ -2620,6 +3060,35 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
 
     def stop_base(self):
         self.cmd_pub.publish(Twist())
+
+    def stop_navigation_for_interaction(self):
+        terminal_states = (
+            GoalStatus.PREEMPTED,
+            GoalStatus.SUCCEEDED,
+            GoalStatus.ABORTED,
+            GoalStatus.REJECTED,
+            GoalStatus.RECALLED,
+            GoalStatus.LOST,
+        )
+        started = time.time()
+        minimum_stop_time = 0.6
+        cancel_timeout = 2.0
+        try:
+            self.move_base.cancel_all_goals()
+        except Exception as exc:
+            rospy.logwarn("Could not cancel move_base goals before owner help: %s", exc)
+
+        while not rospy.is_shutdown() and time.time() - started < cancel_timeout:
+            self.stop_base()
+            try:
+                state = self.move_base.get_state()
+            except Exception:
+                state = GoalStatus.LOST
+            elapsed = time.time() - started
+            if elapsed >= minimum_stop_time and state in terminal_states:
+                break
+            rospy.sleep(0.05)
+        self.stop_base()
 
     def load_waypoint_pose(self, waypoint_name=None):
         target_name = str(waypoint_name or self.waypoint_name).strip()
@@ -3098,83 +3567,131 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         self.profile_path, self.metadata_path = self.owner_profile_paths(owner_index)
 
     def wait_for_owner_name(self, owner_index=None):
-        with self.name_condition:
-            self.latest_name_answer = None
-            self.accepting_name_answer = False
-
         if owner_index is None:
             prompt_text = self.name_prompt_text
         else:
             prompt_text = self.format_owner_index_text(self.indexed_name_prompt_text, owner_index)
+        candidate_name = ""
+        candidate_raw = ""
         self.speak(prompt_text, wait=True)
 
-        with self.name_condition:
-            self.latest_name_answer = None
-            self.accepting_name_answer = True
-            while not rospy.is_shutdown():
+        while not rospy.is_shutdown():
+            with self.name_condition:
+                self.latest_name_answer = None
+                self.accepting_name_answer = True
                 while self.latest_name_answer is None and not rospy.is_shutdown():
                     self.name_condition.wait(timeout=0.2)
-                    self.update_yolo_window("等待第%s位主人姓名" % self.owner_index_label(self.current_owner_index))
+                    self.update_yolo_window(
+                        "等待第%s位主人%s"
+                        % (
+                            self.owner_index_label(self.current_owner_index),
+                            "确认姓名" if candidate_name else "姓名",
+                        )
+                    )
                 raw_answer = self.latest_name_answer or ""
                 self.latest_name_answer = None
-                if not raw_answer:
-                    continue
+                self.accepting_name_answer = False
 
-                if self.is_skip_owner_answer(raw_answer):
-                    if owner_index is None or owner_index <= 1:
-                        self.publish_status(
-                            "owner_skip_ignored",
-                            owner_index=self.current_owner_index,
-                            raw=raw_answer,
-                            reason="first_owner_required",
-                        )
-                        self.speak(self.first_owner_skip_text, wait=True)
-                        continue
+            if not raw_answer:
+                continue
 
-                    self.accepting_name_answer = False
-                    self.skipped_owner_indices.append(self.current_owner_index)
-                    payload = {
-                        "event": "owner_skipped",
-                        "owner_index": self.current_owner_index,
-                        "raw": raw_answer,
-                    }
-                    self.result_pub.publish(String(data=json.dumps(payload, ensure_ascii=False)))
+            if not candidate_name and self.is_skip_owner_answer(raw_answer):
+                if owner_index is None or owner_index <= 1:
                     self.publish_status(
-                        "owner_skipped",
+                        "owner_skip_ignored",
                         owner_index=self.current_owner_index,
                         raw=raw_answer,
+                        reason="first_owner_required",
                     )
-                    self.speak(
-                        self.format_owner_index_text(self.owner_skip_text, self.current_owner_index),
-                        wait=True,
-                    )
-                    rospy.loginfo("Owner %d enrollment skipped by voice command", self.current_owner_index)
-                    return None
-
-                name = self.parse_owner_name(raw_answer)
-                if not name:
-                    self.publish_status("owner_name_ignored", raw=raw_answer)
+                    self.speak(self.first_owner_skip_text, wait=True)
                     continue
 
-                self.owner_name = name
+                self.skipped_owner_indices.append(self.current_owner_index)
                 payload = {
-                    "event": "owner_name_recorded",
+                    "event": "owner_skipped",
                     "owner_index": self.current_owner_index,
-                    "name": name,
                     "raw": raw_answer,
                 }
                 self.result_pub.publish(String(data=json.dumps(payload, ensure_ascii=False)))
                 self.publish_status(
-                    "owner_name_recorded",
+                    "owner_skipped",
                     owner_index=self.current_owner_index,
-                    name=name,
                     raw=raw_answer,
                 )
-                self.accepting_name_answer = False
-                self.speak(self.format_with_name(self.name_recorded_text, name), wait=True)
-                rospy.loginfo("Owner %d name recorded: %s raw=%s", self.current_owner_index, name, raw_answer)
-                return name
-            self.accepting_name_answer = False
+                self.speak(
+                    self.format_owner_index_text(self.owner_skip_text, self.current_owner_index),
+                    wait=True,
+                )
+                rospy.loginfo("Owner %d enrollment skipped by voice command", self.current_owner_index)
+                return None
+
+            if candidate_name:
+                normalized_answer = self.clean_text(raw_answer)
+                if normalized_answer in (
+                    "正确",
+                    "正确的",
+                    "是正确的",
+                    "正確",
+                    "正確的",
+                    "是正確的",
+                ):
+                    self.owner_name = candidate_name
+                    payload = {
+                        "event": "owner_name_recorded",
+                        "owner_index": self.current_owner_index,
+                        "name": candidate_name,
+                        "raw": candidate_raw,
+                        "confirmation": raw_answer,
+                    }
+                    self.result_pub.publish(String(data=json.dumps(payload, ensure_ascii=False)))
+                    self.publish_status(
+                        "owner_name_recorded",
+                        owner_index=self.current_owner_index,
+                        name=candidate_name,
+                        raw=candidate_raw,
+                        confirmation=raw_answer,
+                    )
+                    self.speak(
+                        self.format_with_name(self.name_recorded_text, candidate_name),
+                        wait=True,
+                    )
+                    rospy.loginfo(
+                        "Owner %d name confirmed: %s",
+                        self.current_owner_index,
+                        candidate_name,
+                    )
+                    return candidate_name
+
+                corrected_name = self.parse_owner_name(raw_answer)
+                if corrected_name:
+                    candidate_name = corrected_name
+                    candidate_raw = raw_answer
+                else:
+                    self.publish_status(
+                        "owner_name_confirmation_ignored",
+                        owner_index=self.current_owner_index,
+                        raw=raw_answer,
+                        pending_name=candidate_name,
+                    )
+                    self.speak(
+                        self.format_with_name(self.name_confirm_prompt_text, candidate_name),
+                        wait=True,
+                    )
+                    continue
+
+            else:
+                candidate_name = self.parse_owner_name(raw_answer)
+                candidate_raw = raw_answer if candidate_name else ""
+                if not candidate_name:
+                    self.publish_status("owner_name_ignored", raw=raw_answer)
+                    self.speak(self.name_invalid_text, wait=True)
+                    continue
+
+            self.speak(
+                self.format_with_name(self.name_confirm_prompt_text, candidate_name),
+                wait=True,
+            )
+
         self.speak(self.name_failed_text, wait=True)
         return ""
 
@@ -3951,6 +4468,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         self.wait_for_tts()
         if not self.wait_for_asr():
             return
+        self.warmup_help_qwen()
         self.wait_for_camera_inputs()
         self.init_yolo_window()
         self.update_yolo_window("相机已连接")

@@ -1,10 +1,16 @@
 <launch>
+  <!-- Keep the original node and launch behavior as the default. The optimized
+       entry point reuses this launch file with an alternate node type/name. -->
+  <arg name="task_node_type" default="owner_voice_reid_test.py" />
+  <arg name="task_node_name" default="owner_voice_reid_test" />
+
   <arg name="start_camera" default="true" />
   <arg name="start_yolo" default="true" />
   <arg name="start_voice" default="true" />
-  <arg name="task_node_type" default="owner_voice_reid_test.py" />
-  <arg name="task_node_name" default="owner_voice_reid_test" />
   <arg name="start_asr" default="true" />
+  <arg name="start_paraformer_asr" default="false" />
+  <arg name="start_cloud_asr" default="false" />
+  <arg name="start_xfyun_asr" default="false" />
   <arg name="start_tts" default="true" />
   <arg name="start_sound_play" default="true" />
   <arg name="show_yolo_window" default="true" />
@@ -17,7 +23,15 @@
 
   <arg name="image_topic" default="/kinect2/qhd/image_color_rect" />
   <arg name="detections_topic" default="/perception/person_detections_2d" />
+  <arg name="points_topic" default="/kinect2/qhd/points" />
+  <arg name="pointcloud_nodelet_manager" default="/kinect2_points_manager" />
+  <arg name="pointcloud_nodelet_name" default="kinect2_points_xyzrgb_qhd" />
+  <arg name="pointcloud_nodelet_timeout" default="3.0" />
+  <param name="$(arg pointcloud_nodelet_manager)/$(arg pointcloud_nodelet_name)_loaded" value="false" />
   <arg name="yolo_output" default="screen" />
+  <arg name="yolo_node_type" default="yoloworld_async.py" />
+  <arg name="yolo_node_name" default="yoloworld" />
+  <arg name="yolo_model_path" default="$(find yoloworld_perception)/models/yolov8s-world-person.pt" />
   <arg name="yolo_device" default="cuda:0" />
   <arg name="yolo_require_gpu" default="false" />
   <arg name="yolo_imgsz" default="384" />
@@ -34,6 +48,7 @@
   <arg name="record_sample_count" default="6" />
   <arg name="record_min_samples" default="3" />
   <arg name="reuse_existing_profile" default="false" />
+  <arg name="owner_count" default="3" />
   <arg name="stop_after_first_match" default="false" />
   <arg name="allow_color_fallback" default="false" />
   <arg name="profile_dir" default="$(find wpb_task1_owner_search)/data/reid_owner_voice" />
@@ -43,8 +58,8 @@
   <arg name="lying_match_threshold" default="0.60" />
   <arg name="lying_min_reid_score" default="0.50" />
   <arg name="lying_required_consecutive" default="3" />
-  <arg name="lying_reid_weight" default="0.75" />
-  <arg name="lying_color_weight" default="0.25" />
+  <arg name="lying_reid_weight" default="1.0" />
+  <arg name="lying_color_weight" default="0.0" />
   <arg name="face_verify_enabled" default="true" />
   <arg name="face_auto_download" default="false" />
   <arg name="face_model_name" default="buffalo_sc" />
@@ -55,13 +70,15 @@
   <arg name="face_accept_threshold" default="0.45" />
   <arg name="face_reject_threshold" default="0.25" />
   <arg name="face_min_reid_score" default="0.45" />
-  <arg name="face_identity_weight" default="0.70" />
+  <arg name="face_identity_weight" default="0.85" />
   <arg name="lying_face_identity_weight" default="0.10" />
   <arg name="owner_score_margin_threshold" default="0.04" />
 
   <arg name="navigate_enabled" default="true" />
   <arg name="waypoint_file" default="/home/ubuntu20/waypoints.xml" />
   <arg name="waypoint_name" default="living_room" />
+  <arg name="exit_waypoint_name" default="exit" />
+  <arg name="return_to_exit_when_complete" default="true" />
   <arg name="move_base_server_timeout" default="25.0" />
   <arg name="navigate_timeout" default="120.0" />
   <arg name="clear_costmaps_before_navigation" default="true" />
@@ -69,6 +86,7 @@
   <arg name="clear_costmaps_timeout" default="5.0" />
   <arg name="cmd_vel_topic" default="/cmd_vel" />
   <arg name="odom_topic" default="/odom" />
+  <arg name="scan_topic" default="/scan" />
   <arg name="scan_angular_speed" default="-0.25" />
   <arg name="scan_total_angle" default="3.1416" />
   <arg name="scan_timeout" default="35.0" />
@@ -82,24 +100,150 @@
   <arg name="center_owner_max_angular_speed" default="0.30" />
   <arg name="center_owner_lost_turn_speed" default="0.10" />
 
+  <arg name="interaction_enabled" default="true" />
+  <arg name="approach_enabled" default="true" />
+  <arg name="approach_timeout" default="25.0" />
+  <arg name="approach_standoff_distance" default="0.75" />
+  <arg name="waving_standoff_distance" default="0.48" />
+  <arg name="approach_distance_tolerance" default="0.08" />
+  <arg name="approach_bearing_tolerance" default="0.10" />
+  <arg name="approach_angular_gain" default="0.55" />
+  <arg name="approach_max_angular_speed" default="0.25" />
+  <arg name="approach_linear_gain" default="0.28" />
+  <arg name="approach_max_linear_speed" default="0.18" />
+  <arg name="approach_min_linear_speed" default="0.05" />
+  <arg name="approach_navigation_enabled" default="true" />
+  <arg name="approach_navigation_frame" default="map" />
+  <arg name="approach_navigation_base_frame" default="base_footprint" />
+  <arg name="approach_navigation_tf_timeout" default="0.6" />
+  <arg name="approach_navigation_tf_max_age" default="1.0" />
+  <arg name="approach_navigation_timeout" default="18.0" />
+  <arg name="approach_navigation_server_timeout" default="3.0" />
+  <arg name="approach_navigation_retry_after_clear" default="true" />
+  <arg name="approach_navigation_clear_costmaps_before_goal" default="false" />
+  <arg name="approach_navigation_min_distance" default="0.05" />
+  <arg name="approach_navigation_lidar_guard_enabled" default="true" />
+  <arg name="approach_navigation_stuck_timeout" default="4.0" />
+  <arg name="approach_navigation_stuck_min_progress" default="0.05" />
+  <arg name="approach_navigation_stuck_linear_speed" default="0.025" />
+  <arg name="approach_direct_fallback_enabled" default="false" />
+  <arg name="approach_front_scan_degrees" default="25.0" />
+  <arg name="approach_scan_max_age" default="0.8" />
+  <arg name="approach_lidar_stop_distance" default="0.55" />
+  <arg name="approach_lidar_margin" default="0.08" />
+  <arg name="approach_slow_finish_tolerance" default="0.05" />
+  <arg name="approach_slow_finish_linear_speed" default="0.03" />
+  <arg name="approach_odom_speed_max_age" default="0.6" />
+  <arg name="approach_max_travel_distance" default="1.50" />
+  <arg name="waving_approach_candidate_enabled" default="true" />
+  <arg name="waving_approach_min_owner_distance" default="0.45" />
+  <arg name="waving_approach_max_owner_distance" default="0.50" />
+  <arg name="waving_approach_plan_check" default="true" />
+  <arg name="waving_approach_plan_service" default="/move_base/make_plan" />
+  <arg name="waving_approach_plan_tolerance" default="0.20" />
+  <arg name="waving_approach_safety_radius" default="0.48" />
+  <arg name="waving_approach_still_duration" default="0.8" />
+  <arg name="waving_approach_plan_detour_ratio" default="2.0" />
+  <arg name="waving_approach_plan_detour_margin" default="0.8" />
+  <arg name="waving_approach_plan_turn_limit" default="12.0" />
+  <arg name="waving_approach_retry_after_clear" default="false" />
+  <arg name="pointcloud_max_age" default="1.0" />
+  <arg name="pointcloud_stride" default="8" />
+  <arg name="pointcloud_min_samples" default="30" />
+  <arg name="pointcloud_roi_x_margin" default="0.25" />
+  <arg name="pointcloud_roi_y_min_ratio" default="0.15" />
+  <arg name="pointcloud_roi_y_max_ratio" default="0.85" />
+  <arg name="pointcloud_frame_mode" default="auto" />
+  <arg name="approach_help_prompt" default="请问您需要什么帮助？" />
+  <arg name="approach_failed_prompt" default="我暂时无法靠近您。" />
+  <arg name="fall_prompt" default="我马上过去帮您。" />
+  <arg name="fall_approach_standoff_distance" default="0.75" />
+  <arg name="fall_approach_lidar_stop_distance" default="0.22" />
+  <arg name="fall_approach_lidar_margin" default="0.08" />
+  <arg name="fall_assist_arm_enabled" default="true" />
+  <arg name="mani_ctrl_topic" default="/wpb_home/mani_ctrl" />
+  <arg name="fall_assist_arm_extend_lift" default="0.50" />
+  <arg name="fall_assist_arm_extend_gripper" default="0.12" />
+  <arg name="fall_assist_arm_retract_lift" default="0.0" />
+  <arg name="fall_assist_arm_retract_gripper" default="0.12" />
+  <arg name="fall_assist_arm_extend_wait" default="3.0" />
+  <arg name="fall_assist_arm_hold_seconds" default="4.0" />
+  <arg name="fall_assist_arm_retract_wait" default="3.0" />
+  <arg name="fall_assist_arm_completion_wait" default="1.0" />
+  <arg name="fall_assist_arm_command_rate" default="5.0" />
+  <arg name="fall_assist_arm_lift_velocity" default="0.5" />
+  <arg name="fall_assist_arm_gripper_velocity" default="5.0" />
+  <arg name="electrical_switch_instruction_enabled" default="true" />
+  <arg name="electrical_switch_prompt" default="请指示。" />
+  <arg name="electrical_switch_reply_on" default="好的，已开启电气开关。" />
+  <arg name="electrical_switch_reply_off" default="好的，已关闭电气开关。" />
+  <arg name="electrical_switch_state_topic" default="/electrical_switch/state" />
+
   <arg name="asr_topic" default="/voice/asr_text" />
   <arg name="say_topic" default="/voice/say" />
   <arg name="asr_capture_device" default="default" />
   <arg name="asr_capture_backend" default="auto" />
   <arg name="asr_capture_source" default="" />
   <arg name="asr_capture_volume" default="150%" />
-  <arg name="asr_capture_gain" default="2.0" />
-  <arg name="asr_energy_threshold" default="300" />
+  <arg name="asr_capture_gain" default="3.0" />
+  <arg name="asr_energy_threshold" default="100" />
+  <arg name="asr_model_size" default="$(find offline_voice_bridge)/models/whisper/faster-whisper-small" />
+  <arg name="asr_device" default="cpu" />
+  <arg name="asr_compute_type" default="int8" />
+  <arg name="asr_language" default="zh" />
+  <arg name="asr_sample_rate" default="16000" />
+  <arg name="asr_chunk_seconds" default="0.20" />
+  <arg name="asr_silence_seconds" default="0.80" />
+  <arg name="asr_pre_roll_seconds" default="0.30" />
+  <arg name="asr_min_voice_seconds" default="0.60" />
+  <arg name="asr_max_utterance_seconds" default="15.0" />
+  <arg name="asr_beam_size" default="1" />
+  <arg name="cloud_asr_endpoint" default="wss://dashscope.aliyuncs.com/api-ws/v1/inference" />
+  <arg name="cloud_asr_workspace" default="" />
+  <arg name="cloud_asr_model" default="paraformer-realtime-v2" />
+  <arg name="cloud_asr_chunk_seconds" default="0.20" />
+  <arg name="cloud_asr_max_sentence_silence" default="600" />
+  <arg name="cloud_asr_vocabulary_id" default="" />
+  <arg name="cloud_asr_semantic_punctuation" default="false" />
+  <arg name="xfyun_asr_cn" default="true" />
+  <arg name="xfyun_asr_cue" default="false" />
+  <arg name="xfyun_asr_appid" default="58eeeedf" />
+  <arg name="xfyun_asr_partial_topic" default="/voice/asr_partial" />
   <arg name="asr_wait_timeout" default="45.0" />
-  <arg name="answer_timeout" default="12.0" />
+  <arg name="asr_settle_seconds" default="0.5" />
+  <arg name="asr_python_bin" default="/home/ubuntu20/catkin_ws/.venv/bin/python" />
+  <arg name="asr_model" default="paraformer-zh" />
+  <arg name="asr_modelscope_cache" default="/home/ubuntu20/catkin_ws/.cache/modelscope" />
+  <arg name="asr_input_audio" default="" />
+  <arg name="asr_hotwords" default="牛奶 垃圾 垃圾桶 倒掉 倒一杯 开关 打开 关闭 客厅 卧室 厨房" />
+  <arg name="asr_paraformer_device" default="cpu" />
+  <arg name="asr_paraformer_energy_threshold" default="450.0" />
+  <arg name="asr_paraformer_silence_seconds" default="0.80" />
+  <arg name="asr_paraformer_min_speech_seconds" default="0.35" />
+  <arg name="asr_paraformer_max_utterance_seconds" default="15.0" />
+  <arg name="answer_timeout" default="30.0" />
+  <arg name="help_result_topic" default="/owner_voice_reid_test/help_result" />
+  <arg name="help_llm_url" default="http://127.0.0.1:11434/api/chat" />
+  <arg name="help_llm_model" default="qwen3.5:0.8b" />
+  <arg name="help_llm_timeout" default="60.0" />
+  <arg name="help_llm_keep_alive" default="30m" />
+  <arg name="help_llm_max_tokens" default="80" />
+  <arg name="help_llm_num_ctx" default="4096" />
+  <arg name="help_llm_num_gpu" default="0" />
+  <arg name="help_llm_warmup_enabled" default="true" />
+  <arg name="help_llm_warmup_retries" default="2" />
+  <arg name="help_llm_warmup_retry_delay" default="2.0" />
+  <arg name="strict_rephrase" default="false" />
   <arg name="max_name_retries" default="3" />
+  <arg name="name_prompt_text" default="请按照姓名加名字的格式说出姓名，例如：姓名张三。" />
+  <arg name="indexed_name_prompt_text" default="请第%s位主人按照姓名加名字的格式说出姓名，例如：姓名张三。" />
+  <arg name="name_confirm_prompt_text" default="姓名%s是否正确？正确请说正确，错误请重说。" />
   <arg name="owner_skip_text" default="已跳过第%s位主人的记录。" />
-  <arg name="first_owner_skip_text" default="第一位主人不能跳过，请说姓名。" />
-  <arg name="front_recording_text" default="请慢慢转向侧面。" />
-  <arg name="side_recording_text" default="请侧身面对相机，开始记录侧身特征。" />
-  <arg name="front_to_side_record_seconds" default="4.5" />
-  <arg name="front_to_side_record_sample_count" default="10" />
-  <arg name="front_to_side_record_sample_interval" default="0.35" />
+  <arg name="first_owner_skip_text" default="第一位主人不能跳过，请按照姓名加名字的格式说出姓名，例如姓名张三。" />
+  <arg name="front_recording_text" default="请靠近摄像头，保持正脸，然后慢慢转向侧脸，我会连续记录多张人脸特征。" />
+  <arg name="front_to_side_record_seconds" default="8.0" />
+  <arg name="front_to_side_record_sample_count" default="36" />
+  <arg name="front_to_side_record_sample_interval" default="0.25" />
   <arg name="face_recording_text" default="$(arg front_recording_text)" />
   <arg name="face_front_to_side_record_seconds" default="$(arg front_to_side_record_seconds)" />
   <arg name="face_front_to_side_record_sample_count" default="$(arg front_to_side_record_sample_count)" />
@@ -108,22 +252,27 @@
   <arg name="full_body_front_to_side_record_seconds" default="8.0" />
   <arg name="full_body_front_to_side_record_sample_count" default="36" />
   <arg name="full_body_front_to_side_record_sample_interval" default="0.25" />
-  <arg name="optimized_seated_waving_aspect_ratio" default="0.70" />
+  <arg name="optimized_seated_waving_aspect_ratio" default="0.55" />
+  <arg name="seated_waving_two_stage_enabled" default="true" />
+  <arg name="seated_waving_coarse_standoff_distance" default="1.00" />
+  <arg name="seated_waving_refine_timeout" default="3.0" />
+  <arg name="seated_waving_refine_required_matches" default="2" />
 
   <arg name="action_recognition_enabled" default="true" />
   <arg name="action_launch_file" default="/home/ubuntu20/catkin_ws/src/offline_voice_bridge/launch/qwen_action_recognition.launch" />
-  <arg name="action_node_name" default="owner_action_qwen" />
+  <arg name="action_node_name" default="owner_action_pose" />
   <arg name="action_result_topic" default="/owner_voice_reid_test/action_result" />
   <arg name="action_timeout" default="150.0" />
-  <arg name="action_speech_grace" default="1.0" />
+  <arg name="action_speech_grace" default="0.0" />
+  <arg name="action_lying_bed_speech" default="主人正躺在床上。" />
   <arg name="action_show_window" default="false" />
   <arg name="action_llm_url" default="http://127.0.0.1:11434/api/chat" />
-  <arg name="action_llm_model" default="qwen3.5:2b" />
+  <arg name="action_llm_model" default="qwen3.5:0.8b" />
   <arg name="action_pointcloud_enabled" default="true" />
-  <arg name="action_startup_settle_seconds" default="0.6" />
-  <arg name="action_capture_delay" default="0.3" />
-  <arg name="action_capture_duration" default="5.0" />
-  <arg name="action_capture_frame_count" default="9" />
+  <arg name="action_startup_settle_seconds" default="0.0" />
+  <arg name="action_capture_delay" default="0.0" />
+  <arg name="action_capture_duration" default="0.8" />
+  <arg name="action_capture_frame_count" default="3" />
   <arg name="action_llm_frame_count" default="5" />
   <arg name="action_pose_enabled" default="true" />
   <arg name="action_pose_model_path" default="" />
@@ -142,10 +291,20 @@
   <arg name="action_model_warmup_retry_delay" default="2.0" />
   <arg name="action_use_owner_roi" default="true" />
   <arg name="action_roi_padding" default="0.55" />
-  <arg name="action_yolo_pause_settle_seconds" default="0.8" />
-  <arg name="action_result_connect_timeout" default="10.0" />
-  <arg name="action_pause_yolo" default="true" />
+  <arg name="action_yolo_pause_settle_seconds" default="0.0" />
+  <arg name="action_result_connect_timeout" default="1.0" />
+  <arg name="action_pause_yolo" default="false" />
   <arg name="yolo_pause_topic" default="/yoloworld/pause" />
+  <arg name="optimized_state_topic" default="/owner_voice_reid_optimized/state" />
+  <arg name="optimized_status_topic" default="/owner_voice_reid_optimized/status" />
+  <arg name="patrol_enabled" default="true" />
+  <arg name="patrol_repeat" default="false" />
+  <arg name="patrol_max_rounds" default="1" />
+  <arg name="patrol_waypoint_names" default="living_room,kitchen,bedroom,canteen" />
+  <arg name="optimized_state_timeout" default="0.0" />
+  <arg name="optimized_waving_lidar_guard_distance" default="0.20" />
+  <arg name="approach_debug_logging_enabled" default="true" />
+  <arg name="approach_debug_tick_log_period" default="1.0" />
 
   <!-- Start only the real navigation stack needed by this task. The Kinect is
        already started above, so it stays disabled here to avoid a duplicate
@@ -174,16 +333,16 @@
   <group if="$(arg start_camera)">
     <include file="$(find wpb_task1_owner_search)/launch/kinect2_owner_search.launch">
       <arg name="fps_limit" value="15.0" />
-      <arg name="start_qhd_points" value="true" />
+      <arg name="start_qhd_points" value="false" />
     </include>
   </group>
 
   <group if="$(arg start_yolo)">
-    <node pkg="wpb_task1_owner_search" type="yoloworld_async.py" name="yoloworld"
+    <node pkg="wpb_task1_owner_search" type="$(arg yolo_node_type)" name="$(arg yolo_node_name)"
           output="$(arg yolo_output)" respawn="true" respawn_delay="2.0">
       <env name="PYTORCH_CUDA_ALLOC_CONF" value="expandable_segments:True" />
       <param name="image_topic" value="$(arg image_topic)" />
-      <param name="model_path" value="$(find yoloworld_perception)/models/yolov8s-world-person.pt" />
+      <param name="model_path" value="$(arg yolo_model_path)" />
       <param name="device" value="$(arg yolo_device)" />
       <param name="require_gpu" value="$(arg yolo_require_gpu)" />
       <param name="imgsz" value="$(arg yolo_imgsz)" />
@@ -200,7 +359,7 @@
 
   <group if="$(arg start_voice)">
     <include file="$(find offline_voice_bridge)/launch/offline_voice_zh.launch">
-      <arg name="start_asr" value="$(arg start_asr)" />
+      <arg name="start_asr" value="false" />
       <arg name="start_tts" value="$(arg start_tts)" />
       <arg name="start_sound_play" value="$(arg start_sound_play)" />
       <arg name="asr_capture_device" value="$(arg asr_capture_device)" />
@@ -210,16 +369,109 @@
       <arg name="asr_capture_gain" value="$(arg asr_capture_gain)" />
       <arg name="asr_energy_threshold" value="$(arg asr_energy_threshold)" />
     </include>
+
+    <group if="$(arg start_asr)">
+      <node pkg="wpb_task1_owner_search"
+            type="offline_asr_endpoint_node.py"
+            name="offline_asr_endpoint_node"
+            output="screen">
+        <param name="publish_topic" value="$(arg asr_topic)" />
+        <param name="legacy_publish_topic" value="/xfyun/iat" />
+        <param name="model_size" value="$(arg asr_model_size)" />
+        <param name="device" value="$(arg asr_device)" />
+        <param name="compute_type" value="$(arg asr_compute_type)" />
+        <param name="language" value="$(arg asr_language)" />
+        <param name="sample_rate" value="$(arg asr_sample_rate)" />
+        <param name="chunk_seconds" value="$(arg asr_chunk_seconds)" />
+        <param name="silence_seconds" value="$(arg asr_silence_seconds)" />
+        <param name="pre_roll_seconds" value="$(arg asr_pre_roll_seconds)" />
+        <param name="min_voice_seconds" value="$(arg asr_min_voice_seconds)" />
+        <param name="max_utterance_seconds" value="$(arg asr_max_utterance_seconds)" />
+        <param name="beam_size" value="$(arg asr_beam_size)" />
+        <param name="capture_device" value="$(arg asr_capture_device)" />
+        <param name="capture_backend" value="$(arg asr_capture_backend)" />
+        <param name="capture_source" value="$(arg asr_capture_source)" />
+        <param name="capture_volume" value="$(arg asr_capture_volume)" />
+        <param name="capture_gain" value="$(arg asr_capture_gain)" />
+        <param name="energy_threshold" value="$(arg asr_energy_threshold)" />
+      </node>
+    </group>
+
+    <group if="$(arg start_paraformer_asr)">
+      <include file="$(find offline_voice_bridge)/launch/paraformer_loop_test.launch">
+        <arg name="model" value="$(arg asr_model)" />
+        <arg name="python_bin" value="$(arg asr_python_bin)" />
+        <arg name="device" value="$(arg asr_paraformer_device)" />
+        <arg name="modelscope_cache" value="$(arg asr_modelscope_cache)" />
+        <arg name="input_audio" value="$(arg asr_input_audio)" />
+        <arg name="capture_backend" value="$(arg asr_capture_backend)" />
+        <arg name="capture_device" value="$(arg asr_capture_device)" />
+        <arg name="capture_source" value="$(arg asr_capture_source)" />
+        <arg name="capture_volume" value="$(arg asr_capture_volume)" />
+        <arg name="capture_gain" value="$(arg asr_capture_gain)" />
+        <arg name="hotwords" value="$(arg asr_hotwords)" />
+        <arg name="text_topic" value="$(arg asr_topic)" />
+        <arg name="legacy_topic" value="/xfyun/iat" />
+        <arg name="sample_rate" value="$(arg asr_sample_rate)" />
+        <arg name="chunk_seconds" value="$(arg asr_chunk_seconds)" />
+        <arg name="silence_seconds" value="$(arg asr_paraformer_silence_seconds)" />
+        <arg name="min_speech_seconds" value="$(arg asr_paraformer_min_speech_seconds)" />
+        <arg name="max_utterance_seconds" value="$(arg asr_paraformer_max_utterance_seconds)" />
+        <arg name="energy_threshold" value="$(arg asr_paraformer_energy_threshold)" />
+      </include>
+    </group>
+
+    <group if="$(arg start_cloud_asr)">
+      <node pkg="wpb_task1_owner_search"
+            type="dashscope_realtime_asr_node.py"
+            name="dashscope_realtime_asr"
+            output="screen">
+        <param name="publish_topic" value="$(arg asr_topic)" />
+        <param name="partial_topic" value="/voice/asr_partial" />
+        <param name="legacy_publish_topic" value="/xfyun/iat" />
+        <param name="endpoint" value="$(arg cloud_asr_endpoint)" />
+        <param name="workspace" value="$(arg cloud_asr_workspace)" />
+        <param name="model" value="$(arg cloud_asr_model)" />
+        <param name="sample_rate" value="$(arg asr_sample_rate)" />
+        <param name="chunk_seconds" value="$(arg cloud_asr_chunk_seconds)" />
+        <param name="max_sentence_silence" value="$(arg cloud_asr_max_sentence_silence)" />
+        <param name="semantic_punctuation_enabled" value="$(arg cloud_asr_semantic_punctuation)" />
+        <param name="punctuation_prediction_enabled" value="true" />
+        <param name="inverse_text_normalization_enabled" value="true" />
+        <param name="vocabulary_id" value="$(arg cloud_asr_vocabulary_id)" />
+        <param name="capture_device" value="$(arg asr_capture_device)" />
+        <param name="capture_backend" value="$(arg asr_capture_backend)" />
+        <param name="capture_source" value="$(arg asr_capture_source)" />
+        <param name="capture_volume" value="$(arg asr_capture_volume)" />
+        <param name="capture_gain" value="$(arg asr_capture_gain)" />
+      </node>
+    </group>
+
+    <group if="$(arg start_xfyun_asr)">
+      <include file="$(find wpb_task1_owner_search)/launch/xfyun_streaming_asr.launch">
+        <arg name="publish_topic" value="$(arg asr_topic)" />
+        <arg name="partial_topic" value="$(arg xfyun_asr_partial_topic)" />
+        <arg name="cn" value="$(arg xfyun_asr_cn)" />
+        <arg name="cue" value="$(arg xfyun_asr_cue)" />
+        <arg name="appid" value="$(arg xfyun_asr_appid)" />
+      </include>
+    </group>
+
   </group>
 
   <node pkg="wpb_task1_owner_search" type="$(arg task_node_type)"
         name="$(arg task_node_name)" output="screen">
     <param name="image_topic" value="$(arg image_topic)" />
     <param name="detections_topic" value="$(arg detections_topic)" />
+    <param name="points_topic" value="$(arg points_topic)" />
+    <param name="pointcloud_nodelet_manager" value="$(arg pointcloud_nodelet_manager)" />
+    <param name="pointcloud_nodelet_name" value="$(arg pointcloud_nodelet_name)" />
+    <param name="pointcloud_nodelet_timeout" value="$(arg pointcloud_nodelet_timeout)" />
     <param name="say_topic" value="$(arg say_topic)" />
     <param name="asr_topic" value="$(arg asr_topic)" />
     <param name="status_topic" value="/owner_voice_reid_test/status" />
     <param name="result_topic" value="/owner_voice_reid_test/result" />
+    <param name="help_result_topic" value="$(arg help_result_topic)" />
     <param name="torchreid_root" value="$(find wpb_task1_owner_search)/third_party/deep-person-reid" />
     <param name="profile_dir" value="$(arg profile_dir)" />
     <param name="show_yolo_window" value="$(arg show_yolo_window)" />
@@ -234,6 +486,7 @@
     <param name="crop_top_padding" value="$(arg crop_top_padding)" />
     <param name="crop_bottom_padding" value="$(arg crop_bottom_padding)" />
     <param name="reuse_existing_profile" value="$(arg reuse_existing_profile)" />
+    <param name="owner_count" value="$(arg owner_count)" />
     <param name="stop_after_first_match" value="$(arg stop_after_first_match)" />
     <param name="allow_color_fallback" value="$(arg allow_color_fallback)" />
     <param name="enable_lying_pose_enhancement" value="$(arg enable_lying_pose_enhancement)" />
@@ -260,6 +513,8 @@
     <param name="navigate_enabled" value="$(arg navigate_enabled)" />
     <param name="waypoint_file" value="$(arg waypoint_file)" />
     <param name="waypoint_name" value="$(arg waypoint_name)" />
+    <param name="exit_waypoint_name" value="$(arg exit_waypoint_name)" />
+    <param name="return_to_exit_when_complete" value="$(arg return_to_exit_when_complete)" />
     <param name="move_base_server_timeout" value="$(arg move_base_server_timeout)" />
     <param name="navigate_timeout" value="$(arg navigate_timeout)" />
     <param name="clear_costmaps_before_navigation" value="$(arg clear_costmaps_before_navigation)" />
@@ -267,6 +522,7 @@
     <param name="clear_costmaps_timeout" value="$(arg clear_costmaps_timeout)" />
     <param name="cmd_vel_topic" value="$(arg cmd_vel_topic)" />
     <param name="odom_topic" value="$(arg odom_topic)" />
+    <param name="scan_topic" value="$(arg scan_topic)" />
     <param name="scan_angular_speed" value="$(arg scan_angular_speed)" />
     <param name="scan_total_angle" value="$(arg scan_total_angle)" />
     <param name="scan_timeout" value="$(arg scan_timeout)" />
@@ -279,17 +535,104 @@
     <param name="center_owner_angular_gain" value="$(arg center_owner_angular_gain)" />
     <param name="center_owner_max_angular_speed" value="$(arg center_owner_max_angular_speed)" />
     <param name="center_owner_lost_turn_speed" value="$(arg center_owner_lost_turn_speed)" />
+    <param name="interaction_enabled" value="$(arg interaction_enabled)" />
+    <param name="approach_enabled" value="$(arg approach_enabled)" />
+    <param name="approach_timeout" value="$(arg approach_timeout)" />
+    <param name="approach_standoff_distance" value="$(arg approach_standoff_distance)" />
+    <param name="waving_standoff_distance" value="$(arg waving_standoff_distance)" />
+    <param name="approach_distance_tolerance" value="$(arg approach_distance_tolerance)" />
+    <param name="approach_bearing_tolerance" value="$(arg approach_bearing_tolerance)" />
+    <param name="approach_angular_gain" value="$(arg approach_angular_gain)" />
+    <param name="approach_max_angular_speed" value="$(arg approach_max_angular_speed)" />
+    <param name="approach_linear_gain" value="$(arg approach_linear_gain)" />
+    <param name="approach_max_linear_speed" value="$(arg approach_max_linear_speed)" />
+    <param name="approach_min_linear_speed" value="$(arg approach_min_linear_speed)" />
+    <param name="approach_navigation_enabled" value="$(arg approach_navigation_enabled)" />
+    <param name="approach_navigation_frame" value="$(arg approach_navigation_frame)" />
+    <param name="approach_navigation_base_frame" value="$(arg approach_navigation_base_frame)" />
+    <param name="approach_navigation_tf_timeout" value="$(arg approach_navigation_tf_timeout)" />
+    <param name="approach_navigation_tf_max_age" value="$(arg approach_navigation_tf_max_age)" />
+    <param name="approach_navigation_timeout" value="$(arg approach_navigation_timeout)" />
+    <param name="approach_navigation_server_timeout" value="$(arg approach_navigation_server_timeout)" />
+    <param name="approach_navigation_retry_after_clear" value="$(arg approach_navigation_retry_after_clear)" />
+    <param name="approach_navigation_clear_costmaps_before_goal" value="$(arg approach_navigation_clear_costmaps_before_goal)" />
+    <param name="approach_navigation_min_distance" value="$(arg approach_navigation_min_distance)" />
+    <param name="approach_navigation_lidar_guard_enabled" value="$(arg approach_navigation_lidar_guard_enabled)" />
+    <param name="approach_navigation_stuck_timeout" value="$(arg approach_navigation_stuck_timeout)" />
+    <param name="approach_navigation_stuck_min_progress" value="$(arg approach_navigation_stuck_min_progress)" />
+    <param name="approach_navigation_stuck_linear_speed" value="$(arg approach_navigation_stuck_linear_speed)" />
+    <param name="approach_direct_fallback_enabled" value="$(arg approach_direct_fallback_enabled)" />
+    <param name="approach_front_scan_degrees" value="$(arg approach_front_scan_degrees)" />
+    <param name="approach_scan_max_age" value="$(arg approach_scan_max_age)" />
+    <param name="approach_lidar_stop_distance" value="$(arg approach_lidar_stop_distance)" />
+    <param name="approach_lidar_margin" value="$(arg approach_lidar_margin)" />
+    <param name="approach_slow_finish_tolerance" value="$(arg approach_slow_finish_tolerance)" />
+    <param name="approach_slow_finish_linear_speed" value="$(arg approach_slow_finish_linear_speed)" />
+    <param name="approach_odom_speed_max_age" value="$(arg approach_odom_speed_max_age)" />
+    <param name="approach_max_travel_distance" value="$(arg approach_max_travel_distance)" />
+    <param name="waving_approach_candidate_enabled" value="$(arg waving_approach_candidate_enabled)" />
+    <param name="waving_approach_min_owner_distance" value="$(arg waving_approach_min_owner_distance)" />
+    <param name="waving_approach_max_owner_distance" value="$(arg waving_approach_max_owner_distance)" />
+    <param name="waving_approach_plan_check" value="$(arg waving_approach_plan_check)" />
+    <param name="waving_approach_plan_service" value="$(arg waving_approach_plan_service)" />
+    <param name="waving_approach_plan_tolerance" value="$(arg waving_approach_plan_tolerance)" />
+    <param name="waving_approach_safety_radius" value="$(arg waving_approach_safety_radius)" />
+    <param name="waving_approach_still_duration" value="$(arg waving_approach_still_duration)" />
+    <param name="waving_approach_plan_detour_ratio" value="$(arg waving_approach_plan_detour_ratio)" />
+    <param name="waving_approach_plan_detour_margin" value="$(arg waving_approach_plan_detour_margin)" />
+    <param name="waving_approach_plan_turn_limit" value="$(arg waving_approach_plan_turn_limit)" />
+    <param name="waving_approach_retry_after_clear" value="$(arg waving_approach_retry_after_clear)" />
+    <param name="pointcloud_max_age" value="$(arg pointcloud_max_age)" />
+    <param name="pointcloud_stride" value="$(arg pointcloud_stride)" />
+    <param name="pointcloud_min_samples" value="$(arg pointcloud_min_samples)" />
+    <param name="pointcloud_roi_x_margin" value="$(arg pointcloud_roi_x_margin)" />
+    <param name="pointcloud_roi_y_min_ratio" value="$(arg pointcloud_roi_y_min_ratio)" />
+    <param name="pointcloud_roi_y_max_ratio" value="$(arg pointcloud_roi_y_max_ratio)" />
+    <param name="pointcloud_frame_mode" value="$(arg pointcloud_frame_mode)" />
+    <param name="approach_help_prompt" value="$(arg approach_help_prompt)" />
+    <param name="approach_failed_prompt" value="$(arg approach_failed_prompt)" />
+    <param name="fall_prompt" value="$(arg fall_prompt)" />
+    <param name="fall_approach_standoff_distance" value="$(arg fall_approach_standoff_distance)" />
+    <param name="fall_approach_lidar_stop_distance" value="$(arg fall_approach_lidar_stop_distance)" />
+    <param name="fall_approach_lidar_margin" value="$(arg fall_approach_lidar_margin)" />
+    <param name="fall_assist_arm_enabled" value="$(arg fall_assist_arm_enabled)" />
+    <param name="mani_ctrl_topic" value="$(arg mani_ctrl_topic)" />
+    <param name="fall_assist_arm_extend_lift" value="$(arg fall_assist_arm_extend_lift)" />
+    <param name="fall_assist_arm_extend_gripper" value="$(arg fall_assist_arm_extend_gripper)" />
+    <param name="fall_assist_arm_retract_lift" value="$(arg fall_assist_arm_retract_lift)" />
+    <param name="fall_assist_arm_retract_gripper" value="$(arg fall_assist_arm_retract_gripper)" />
+    <param name="fall_assist_arm_extend_wait" value="$(arg fall_assist_arm_extend_wait)" />
+    <param name="fall_assist_arm_hold_seconds" value="$(arg fall_assist_arm_hold_seconds)" />
+    <param name="fall_assist_arm_retract_wait" value="$(arg fall_assist_arm_retract_wait)" />
+    <param name="fall_assist_arm_completion_wait" value="$(arg fall_assist_arm_completion_wait)" />
+    <param name="fall_assist_arm_command_rate" value="$(arg fall_assist_arm_command_rate)" />
+    <param name="fall_assist_arm_lift_velocity" value="$(arg fall_assist_arm_lift_velocity)" />
+    <param name="fall_assist_arm_gripper_velocity" value="$(arg fall_assist_arm_gripper_velocity)" />
+    <param name="electrical_switch_instruction_enabled" value="$(arg electrical_switch_instruction_enabled)" />
+    <param name="electrical_switch_prompt" value="$(arg electrical_switch_prompt)" />
+    <param name="electrical_switch_reply_on" value="$(arg electrical_switch_reply_on)" />
+    <param name="electrical_switch_reply_off" value="$(arg electrical_switch_reply_off)" />
+    <param name="electrical_switch_state_topic" value="$(arg electrical_switch_state_topic)" />
     <param name="answer_timeout" value="$(arg answer_timeout)" />
     <param name="asr_wait_timeout" value="$(arg asr_wait_timeout)" />
+    <param name="asr_settle_seconds" value="$(arg asr_settle_seconds)" />
+    <param name="help_llm_url" value="$(arg help_llm_url)" />
+    <param name="help_llm_model" value="$(arg help_llm_model)" />
+    <param name="help_llm_timeout" value="$(arg help_llm_timeout)" />
+    <param name="help_llm_keep_alive" value="$(arg help_llm_keep_alive)" />
+    <param name="help_llm_max_tokens" value="$(arg help_llm_max_tokens)" />
+    <param name="help_llm_num_ctx" value="$(arg help_llm_num_ctx)" />
+    <param name="help_llm_num_gpu" value="$(arg help_llm_num_gpu)" />
+    <param name="help_llm_warmup_enabled" value="$(arg help_llm_warmup_enabled)" />
+    <param name="help_llm_warmup_retries" value="$(arg help_llm_warmup_retries)" />
+    <param name="help_llm_warmup_retry_delay" value="$(arg help_llm_warmup_retry_delay)" />
+    <param name="strict_rephrase" value="$(arg strict_rephrase)" />
     <param name="max_name_retries" value="$(arg max_name_retries)" />
-    <param name="name_prompt_text" value="请说姓名" />
+    <param name="name_prompt_text" value="$(arg name_prompt_text)" />
+    <param name="indexed_name_prompt_text" value="$(arg indexed_name_prompt_text)" />
+    <param name="name_confirm_prompt_text" value="$(arg name_confirm_prompt_text)" />
     <param name="owner_skip_text" value="$(arg owner_skip_text)" />
     <param name="first_owner_skip_text" value="$(arg first_owner_skip_text)" />
-    <param name="front_recording_text" value="$(arg front_recording_text)" />
-    <param name="side_recording_text" value="$(arg side_recording_text)" />
-    <param name="front_to_side_record_seconds" value="$(arg front_to_side_record_seconds)" />
-    <param name="front_to_side_record_sample_count" value="$(arg front_to_side_record_sample_count)" />
-    <param name="front_to_side_record_sample_interval" value="$(arg front_to_side_record_sample_interval)" />
     <param name="face_recording_text" value="$(arg face_recording_text)" />
     <param name="face_front_to_side_record_seconds" value="$(arg face_front_to_side_record_seconds)" />
     <param name="face_front_to_side_record_sample_count" value="$(arg face_front_to_side_record_sample_count)" />
@@ -299,12 +642,17 @@
     <param name="full_body_front_to_side_record_sample_count" value="$(arg full_body_front_to_side_record_sample_count)" />
     <param name="full_body_front_to_side_record_sample_interval" value="$(arg full_body_front_to_side_record_sample_interval)" />
     <param name="optimized_seated_waving_aspect_ratio" value="$(arg optimized_seated_waving_aspect_ratio)" />
+    <param name="seated_waving_two_stage_enabled" value="$(arg seated_waving_two_stage_enabled)" />
+    <param name="seated_waving_coarse_standoff_distance" value="$(arg seated_waving_coarse_standoff_distance)" />
+    <param name="seated_waving_refine_timeout" value="$(arg seated_waving_refine_timeout)" />
+    <param name="seated_waving_refine_required_matches" value="$(arg seated_waving_refine_required_matches)" />
     <param name="action_recognition_enabled" value="$(arg action_recognition_enabled)" />
     <param name="action_launch_file" value="$(arg action_launch_file)" />
     <param name="action_node_name" value="$(arg action_node_name)" />
     <param name="action_result_topic" value="$(arg action_result_topic)" />
     <param name="action_timeout" value="$(arg action_timeout)" />
     <param name="action_speech_grace" value="$(arg action_speech_grace)" />
+    <param name="action_lying_bed_speech" value="$(arg action_lying_bed_speech)" />
     <param name="action_show_window" value="$(arg action_show_window)" />
     <param name="action_llm_url" value="$(arg action_llm_url)" />
     <param name="action_llm_model" value="$(arg action_llm_model)" />
@@ -335,6 +683,16 @@
     <param name="action_result_connect_timeout" value="$(arg action_result_connect_timeout)" />
     <param name="action_pause_yolo" value="$(arg action_pause_yolo)" />
     <param name="yolo_pause_topic" value="$(arg yolo_pause_topic)" />
+    <param name="optimized_state_topic" value="$(arg optimized_state_topic)" />
+    <param name="optimized_status_topic" value="$(arg optimized_status_topic)" />
+    <param name="patrol_enabled" value="$(arg patrol_enabled)" />
+    <param name="patrol_repeat" value="$(arg patrol_repeat)" />
+    <param name="patrol_max_rounds" value="$(arg patrol_max_rounds)" />
+    <param name="patrol_waypoint_names" value="$(arg patrol_waypoint_names)" />
+    <param name="optimized_state_timeout" value="$(arg optimized_state_timeout)" />
+    <param name="optimized_waving_lidar_guard_distance" value="$(arg optimized_waving_lidar_guard_distance)" />
+    <param name="approach_debug_logging_enabled" value="$(arg approach_debug_logging_enabled)" />
+    <param name="approach_debug_tick_log_period" value="$(arg approach_debug_tick_log_period)" />
     <param name="recording_text" value="开始记录主人特征，请保持在相机画面中。" />
     <param name="record_done_text" value="主人特征记录结束" />
     <param name="owner_found_text" value="识别到主人" />

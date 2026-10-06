@@ -15,6 +15,7 @@
   <depend>geometry_msgs</depend>
   <depend>move_base_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>nodelet</depend>
   <depend>perception_msgs</depend>
   <depend>rospy</depend>
   <depend>sensor_msgs</depend>
@@ -25,6 +26,7 @@
   <exec_depend>amcl</exec_depend>
   <exec_depend>jie_ware</exec_depend>
   <exec_depend>kinect2_bridge</exec_depend>
+  <exec_depend>depth_image_proc</exec_depend>
   <exec_depend>map_server</exec_depend>
   <exec_depend>move_base</exec_depend>
   <exec_depend>offline_voice_bridge</exec_depend>

@@ -125,6 +125,24 @@ class PersonReidOwnerTest:
         )
         self.lying_reid_weight = max(0.0, float(rospy.get_param("~lying_reid_weight", 1.0)))
         self.lying_color_weight = max(0.0, float(rospy.get_param("~lying_color_weight", 0.0)))
+        self.pose_enabled = bool(rospy.get_param("~pose_enabled", True))
+        self.pose_model_path = os.path.expanduser(
+            str(rospy.get_param("~pose_model_path", "") or "").strip()
+        )
+        self.pose_device = str(rospy.get_param("~pose_device", "cpu") or "cpu").strip()
+        self.pose_image_size = max(160, int(rospy.get_param("~pose_image_size", 416)))
+        self.pose_confidence = float(rospy.get_param("~pose_confidence", 0.25))
+        self.pose_iou = float(rospy.get_param("~pose_iou", 0.45))
+        self.pose_max_detections = max(
+            1,
+            int(rospy.get_param("~pose_max_detections", 4)),
+        )
+        self.pose_lying_torso_verticality = float(
+            rospy.get_param("~pose_lying_torso_verticality", 0.45)
+        )
+        self.pose_analyzer = None
+        self.pose_model_ready = False
+        self.init_pose_analyzer()
 
         self.say_wait_for_subscribers = bool(rospy.get_param("~say_wait_for_subscribers", True))
         self.say_wait_timeout = float(rospy.get_param("~say_wait_timeout", 15.0))
@@ -390,14 +408,64 @@ class PersonReidOwnerTest:
             return None
         return float(np.dot(self.owner_color_embedding, color_embedding))
 
-    def is_lying_candidate(self, candidate):
-        if not self.enable_lying_pose_enhancement:
+    def init_pose_analyzer(self):
+        if not self.pose_enabled:
+            rospy.loginfo("Owner pose classification disabled")
             return False
-        xmin, ymin, xmax, ymax = candidate["bbox"]
-        width = xmax - xmin
-        height = ymax - ymin
-        aspect_ratio = float(width) / float(max(1, height))
-        return aspect_ratio >= self.lying_aspect_ratio_threshold
+        try:
+            offline_voice_scripts = os.path.abspath(
+                os.path.join(package_dir(), "..", "offline_voice_bridge", "scripts")
+            )
+            if offline_voice_scripts not in sys.path:
+                sys.path.insert(0, offline_voice_scripts)
+            from qwen_action_recognition_node import PoseActionAnalyzer
+
+            configured_path = self.pose_model_path
+            if not configured_path:
+                configured_path = PoseActionAnalyzer.resolve_model_path("")
+            self.pose_analyzer = PoseActionAnalyzer(
+                configured_path,
+                self.pose_device,
+                self.pose_image_size,
+                self.pose_confidence,
+                self.pose_iou,
+                self.pose_max_detections,
+            )
+            ready, message = self.pose_analyzer.initialize()
+            self.pose_model_ready = bool(ready)
+            if ready:
+                rospy.loginfo(
+                    "Owner pose classification ready: model=%s device=%s",
+                    self.pose_analyzer.model_path,
+                    self.pose_device,
+                )
+            else:
+                rospy.logwarn("Owner pose classification disabled: %s", message)
+        except Exception as exc:
+            self.pose_analyzer = None
+            self.pose_model_ready = False
+            rospy.logwarn("Failed to initialize owner pose classification: %s", exc)
+        return self.pose_model_ready
+
+    def is_lying_candidate(self, candidate, crop=None):
+        del candidate
+        if not self.pose_model_ready or self.pose_analyzer is None or crop is None:
+            return False
+        try:
+            features = self.pose_analyzer.extract_features([crop])
+        except Exception as exc:
+            rospy.logwarn_throttle(
+                5.0,
+                "Owner pose classification failed: %s",
+                exc,
+            )
+            return False
+        if not features:
+            return False
+        torso_verticality = features[-1].get("torso_verticality")
+        if torso_verticality is None:
+            return False
+        return float(torso_verticality) < self.pose_lying_torso_verticality
 
     def reid_query_variants(self, crop, lying_pose):
         variants = [("raw", crop)]
@@ -448,6 +516,33 @@ class PersonReidOwnerTest:
         cv2.imwrite(path, crop)
         return path
 
+    @staticmethod
+    def atomic_save_npz(path, payload):
+        directory = os.path.dirname(os.path.abspath(path))
+        os.makedirs(directory, exist_ok=True)
+        temporary_path = "%s.tmp.%d.npz" % (path, os.getpid())
+        try:
+            np.savez(temporary_path, **payload)
+            os.replace(temporary_path, path)
+        finally:
+            if os.path.exists(temporary_path):
+                os.remove(temporary_path)
+
+    @staticmethod
+    def atomic_save_json(path, payload):
+        directory = os.path.dirname(os.path.abspath(path))
+        os.makedirs(directory, exist_ok=True)
+        temporary_path = "%s.tmp.%d" % (path, os.getpid())
+        try:
+            with open(temporary_path, "w", encoding="utf-8") as metadata_file:
+                json.dump(payload, metadata_file, ensure_ascii=False, indent=2)
+                metadata_file.flush()
+                os.fsync(metadata_file.fileno())
+            os.replace(temporary_path, path)
+        finally:
+            if os.path.exists(temporary_path):
+                os.remove(temporary_path)
+
     def save_owner_profile(self, embeddings, sample_meta, color_embeddings=None):
         mean_embedding = normalize_vector(np.mean(np.vstack(embeddings), axis=0))
         if mean_embedding is None:
@@ -467,7 +562,7 @@ class PersonReidOwnerTest:
             mean_color_embedding = normalize_vector(np.mean(np.vstack(color_embeddings), axis=0))
             if mean_color_embedding is not None:
                 npz_payload["color_embedding"] = mean_color_embedding.astype(np.float32)
-        np.savez(self.profile_path, **npz_payload)
+        self.atomic_save_npz(self.profile_path, npz_payload)
         metadata = {
             "created_at": time.strftime("%Y-%m-%d %H:%M:%S"),
             "backend": self.reid_backend,
@@ -482,8 +577,7 @@ class PersonReidOwnerTest:
             "has_color_embedding": mean_color_embedding is not None,
             "samples": sample_meta,
         }
-        with open(self.metadata_path, "w", encoding="utf-8") as metadata_file:
-            json.dump(metadata, metadata_file, ensure_ascii=False, indent=2)
+        self.atomic_save_json(self.metadata_path, metadata)
         self.owner_embedding = mean_embedding
         self.owner_embedding_bank = embedding_bank
         self.owner_color_embedding = mean_color_embedding
@@ -493,23 +587,23 @@ class PersonReidOwnerTest:
     def load_owner_profile(self):
         if not os.path.exists(self.profile_path):
             return False
-        profile = np.load(self.profile_path, allow_pickle=False)
-        embedding = normalize_vector(profile["embedding"])
-        if embedding is None:
-            raise RuntimeError("owner profile exists but embedding is invalid: %s" % self.profile_path)
-        self.owner_embedding = embedding
-        bank = []
-        if "embedding_bank" in profile.files:
-            for vector in np.asarray(profile["embedding_bank"]):
-                normalized = normalize_vector(vector)
-                if normalized is not None:
-                    bank.append(normalized)
-        if not bank:
-            bank.append(embedding)
-        self.owner_embedding_bank = np.vstack(bank).astype(np.float32)
-        self.owner_color_embedding = None
-        if "color_embedding" in profile.files:
-            self.owner_color_embedding = normalize_vector(profile["color_embedding"])
+        with np.load(self.profile_path, allow_pickle=False) as profile:
+            embedding = normalize_vector(profile["embedding"])
+            if embedding is None:
+                raise RuntimeError("owner profile exists but embedding is invalid: %s" % self.profile_path)
+            self.owner_embedding = embedding
+            bank = []
+            if "embedding_bank" in profile.files:
+                for vector in np.asarray(profile["embedding_bank"]):
+                    normalized = normalize_vector(vector)
+                    if normalized is not None:
+                        bank.append(normalized)
+            if not bank:
+                bank.append(embedding)
+            self.owner_embedding_bank = np.vstack(bank).astype(np.float32)
+            self.owner_color_embedding = None
+            if "color_embedding" in profile.files:
+                self.owner_color_embedding = normalize_vector(profile["color_embedding"])
         if os.path.exists(self.metadata_path):
             with open(self.metadata_path, "r", encoding="utf-8") as metadata_file:
                 self.owner_profile_meta = json.load(metadata_file)
@@ -588,11 +682,22 @@ class PersonReidOwnerTest:
         query_crops = []
         records = []
         for candidate in candidates:
-            lying_pose = self.is_lying_candidate(candidate)
-            padding = self.lying_crop_padding if lying_pose else self.crop_padding
-            crop, crop_bbox = self.crop_candidate(image, candidate, padding=padding)
+            crop, crop_bbox = self.crop_candidate(
+                image,
+                candidate,
+                padding=self.crop_padding,
+            )
             if crop is None:
                 continue
+            lying_pose = self.is_lying_candidate(candidate, crop=crop)
+            if lying_pose and self.lying_crop_padding > self.crop_padding:
+                crop, crop_bbox = self.crop_candidate(
+                    image,
+                    candidate,
+                    padding=self.lying_crop_padding,
+                )
+                if crop is None:
+                    continue
             meta = dict(candidate)
             meta["crop_bbox"] = crop_bbox
             meta["lying_pose"] = lying_pose

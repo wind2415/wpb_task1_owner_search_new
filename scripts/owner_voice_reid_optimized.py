@@ -18,6 +18,15 @@ if SCRIPT_DIR not in sys.path:
 
 from owner_voice_reid_test import OwnerVoiceReidTest
 
+DEFAULT_ACTION_DIAGNOSTICS_LOG_PATH = os.path.abspath(
+    os.path.join(
+        SCRIPT_DIR,
+        "..",
+        "logs",
+        "optimized_action_diagnostics.jsonl",
+    )
+)
+
 
 class WorkflowState(Enum):
     INITIALIZE = "initialize"
@@ -40,6 +49,28 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
     def __init__(self):
         super().__init__()
 
+        self.action_diagnostics_log_path = os.path.abspath(
+            os.path.expanduser(
+                str(
+                    rospy.get_param(
+                        "~action_diagnostics_log_path",
+                        DEFAULT_ACTION_DIAGNOSTICS_LOG_PATH,
+                    )
+                )
+            )
+        )
+        self.action_diagnostics_session_id = str(
+            rospy.get_param(
+                "~action_diagnostics_session_id",
+                "%s-%d" % (time.strftime("%Y%m%d-%H%M%S"), os.getpid()),
+            )
+        ).strip()
+        self.debug_label_topic = str(
+            rospy.get_param(
+                "~debug_label_topic",
+                "/owner_voice_reid_optimized/debug_label",
+            )
+        ).strip()
         self.optimized_waving_lidar_guard_distance = max(
             0.05,
             float(
@@ -97,8 +128,35 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
                 )
             ),
         )
+        self.seated_waving_upright_veto_ratio = max(
+            0.0,
+            min(
+                1.0,
+                float(rospy.get_param("~seated_waving_upright_veto_ratio", 0.50)),
+            ),
+        )
+        self.seated_waving_straight_knee_angle = max(
+            0.0,
+            float(rospy.get_param("~seated_waving_straight_knee_angle", 160.0)),
+        )
         self.seated_waving_two_stage_enabled = bool(
             rospy.get_param("~seated_waving_two_stage_enabled", True)
+        )
+        self.seated_waving_standoff_distance = max(
+            self.waving_approach_safety_radius + 0.05,
+            float(rospy.get_param("~seated_waving_standoff_distance", 0.75)),
+        )
+        self.standing_waving_standoff_distance = max(
+            self.waving_approach_safety_radius,
+            min(
+                0.50,
+                float(
+                    rospy.get_param(
+                        "~standing_waving_standoff_distance",
+                        0.48,
+                    )
+                ),
+            ),
         )
         self.seated_waving_coarse_standoff_distance = max(
             self.waving_approach_safety_radius + 0.20,
@@ -163,6 +221,85 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         self.current_action_result = None
         self.patrol_results = []
         rospy.on_shutdown(self.stop_workflow_watchdog)
+        self.debug_label_sub = rospy.Subscriber(
+            self.debug_label_topic,
+            String,
+            self.debug_label_callback,
+            queue_size=5,
+        )
+        self.write_action_diagnostic(
+            "session_started",
+            session_id=self.action_diagnostics_session_id,
+            log_path=self.action_diagnostics_log_path,
+            profile_dir=self.profile_dir,
+            reuse_existing_profile=self.reuse_existing_profile,
+            owner_count=self.owner_count,
+            patrol_enabled=self.patrol_enabled,
+            patrol_waypoint_names=self.patrol_waypoint_names,
+            action_pose_enabled=self.action_pose_enabled,
+            action_pose_device=self.action_pose_device,
+            action_pose_confidence=self.action_pose_confidence,
+            action_pose_image_size=self.action_pose_image_size,
+            debug_label_topic=self.debug_label_topic,
+        )
+        self.write_action_diagnostic(
+            "session_started",
+            session_id=self.action_diagnostics_session_id,
+            log_path=self.action_diagnostics_log_path,
+            profile_dir=self.profile_dir,
+            reuse_existing_profile=self.reuse_existing_profile,
+            owner_count=self.owner_count,
+            patrol_enabled=self.patrol_enabled,
+            patrol_waypoint_names=self.patrol_waypoint_names,
+            action_pose_enabled=self.action_pose_enabled,
+            action_pose_device=self.action_pose_device,
+            action_pose_confidence=self.action_pose_confidence,
+            action_pose_image_size=self.action_pose_image_size,
+        )
+
+    def write_action_diagnostic(self, event, **fields):
+        payload = {
+            "time": time.time(),
+            "node": rospy.get_name(),
+            "event": str(event),
+            "session_id": self.action_diagnostics_session_id,
+        }
+        payload.update(fields)
+        try:
+            directory = os.path.dirname(self.action_diagnostics_log_path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            with open(
+                self.action_diagnostics_log_path,
+                "a",
+                encoding="utf-8",
+            ) as handle:
+                handle.write(
+                    json.dumps(
+                        payload,
+                        ensure_ascii=False,
+                        default=str,
+                        sort_keys=True,
+                    )
+                    + "\n"
+                )
+        except Exception as exc:
+            rospy.logwarn_throttle(
+                10.0,
+                "Optimized action diagnostics log write failed: %s",
+                exc,
+            )
+
+    def debug_label_callback(self, message):
+        text = str(getattr(message, "data", "") or "").strip()
+        if not text:
+            return
+        self.write_action_diagnostic(
+            "operator_label",
+            label=text,
+            current_action=self.current_action_result,
+            current_waypoint=self.current_patrol_waypoint,
+        )
 
     @staticmethod
     def _approach_debug_value(value):
@@ -230,6 +367,7 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         standoff_distance,
         waving=False,
         lidar_guard_distance_override=None,
+        waving_front_only=False,
     ):
         self.approach_debug_sequence += 1
         self.approach_debug_started_at = time.time()
@@ -248,6 +386,7 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         self.approach_debug_event(
             "approach_started",
             waving=bool(waving),
+            waving_front_only=bool(waving_front_only),
             standoff_distance=float(standoff_distance),
             owner_index=(owner_result or {}).get("owner_index")
             if isinstance(owner_result, dict)
@@ -268,6 +407,7 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
                 standoff_distance,
                 waving=waving,
                 lidar_guard_distance_override=effective_lidar_guard_distance,
+                waving_front_only=waving_front_only,
             )
         except Exception as exc:
             self.approach_debug_event(
@@ -412,6 +552,33 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         return result
 
     def announce_owner_result(self, result):
+        self.write_action_diagnostic(
+            "owner_recognized",
+            owner_index=(result or {}).get("owner_index")
+            if isinstance(result, dict)
+            else None,
+            owner_name=(result or {}).get("owner_name", "")
+            if isinstance(result, dict)
+            else "",
+            score=(result or {}).get("score")
+            if isinstance(result, dict)
+            else None,
+            identity_score=(result or {}).get("identity_score")
+            if isinstance(result, dict)
+            else None,
+            reid_score=(result or {}).get("reid_score")
+            if isinstance(result, dict)
+            else None,
+            face_score=(result or {}).get("face_score")
+            if isinstance(result, dict)
+            else None,
+            face_count=(result or {}).get("face_count")
+            if isinstance(result, dict)
+            else None,
+            candidate=(result or {}).get("candidate", {})
+            if isinstance(result, dict)
+            else {},
+        )
         self.set_workflow_state(
             WorkflowState.OWNER_CONFIRMED,
             reason="owner_match_confirmed",
@@ -421,6 +588,21 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         return super().announce_owner_result(result)
 
     def run_owner_action_recognition(self, owner_result):
+        self.write_action_diagnostic(
+            "action_recognition_started",
+            owner_index=(owner_result or {}).get("owner_index")
+            if isinstance(owner_result, dict)
+            else None,
+            owner_name=(owner_result or {}).get("owner_name", "")
+            if isinstance(owner_result, dict)
+            else "",
+            owner_candidate=(owner_result or {}).get("candidate", {})
+            if isinstance(owner_result, dict)
+            else {},
+            owner_score=(owner_result or {}).get("score")
+            if isinstance(owner_result, dict)
+            else None,
+        )
         self.set_workflow_state(
             WorkflowState.RECOGNIZE_ACTION,
             reason="owner_confirmed",
@@ -428,6 +610,19 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         )
         result = super().run_owner_action_recognition(owner_result)
         self.current_action_result = self.normalize_action_result(result)
+        self.write_action_diagnostic(
+            "optimized_action_result",
+            action_result=self.current_action_result,
+            owner_candidate=(owner_result or {}).get("candidate", {}),
+            owner_index=(owner_result or {}).get("owner_index"),
+        )
+        self.write_action_diagnostic(
+            "action_recognition_finished",
+            action_result=self.current_action_result,
+            owner_index=(owner_result or {}).get("owner_index")
+            if isinstance(owner_result, dict)
+            else None,
+        )
         return self.current_action_result
 
     @staticmethod
@@ -491,88 +686,63 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         if str(action_result.get("action", "") or "").strip().lower() != "waving":
             return False
 
-        place = str(action_result.get("place", "") or "").strip().lower()
-        if place in {"chair", "sofa", "bed"}:
-            return True
-
-        ground_relation = action_result.get("ground_relation")
-        if (
-            isinstance(ground_relation, dict)
-            and str(ground_relation.get("status", "") or "").strip().lower()
-            == "elevated"
-        ):
-            return True
-
-        speech = str(action_result.get("speech", "") or "")
-        if any(marker in speech for marker in ("坐", "椅子", "沙发", "床")):
-            return True
-
-        candidate = owner_result.get("candidate", {}) if isinstance(owner_result, dict) else {}
-        if not isinstance(candidate, dict):
-            return False
-        aspect_ratio = candidate.get("aspect_ratio")
-        if aspect_ratio is None:
-            bbox = candidate.get("bbox")
-            if not bbox or len(bbox) < 4:
-                return False
-            try:
-                width = float(bbox[2]) - float(bbox[0])
-                height = float(bbox[3]) - float(bbox[1])
-                aspect_ratio = width / max(1.0, height)
-            except (TypeError, ValueError):
-                return False
-        try:
-            aspect_ratio = float(aspect_ratio)
-        except (TypeError, ValueError):
-            return False
-        is_not_lying = not bool(candidate.get("lying_pose", False))
-        seated = (
-            aspect_ratio >= self.optimized_seated_waving_aspect_ratio
-            and aspect_ratio < self.lying_aspect_ratio_threshold
-            and is_not_lying
+        posture = self.confirmed_waving_posture(action_result)
+        seated = posture == "sitting"
+        self.write_action_diagnostic(
+            "seated_waving_decision",
+            action_result=action_result,
+            owner_candidate=(
+                owner_result.get("candidate", {})
+                if isinstance(owner_result, dict) else {}
+            ),
+            pose_geometry=action_result.get("pose_geometry", {}),
+            posture=posture,
+            posture_confidence=action_result.get("posture_confidence", 0.0),
+            posture_reason=action_result.get("posture_reason", "missing posture evidence"),
+            seated=seated,
+            owner_front_approach=True,
+            waypoint=self.current_patrol_waypoint,
         )
         rospy.loginfo(
-            "Optimized waving posture check: aspect=%.3f threshold=%.3f "
-            "lying_pose=%s seated=%s",
-            aspect_ratio,
-            self.optimized_seated_waving_aspect_ratio,
-            bool(candidate.get("lying_pose", False)),
-            seated,
+            "Optimized waving posture: posture=%s confidence=%s reason=%s",
+            posture,
+            action_result.get("posture_confidence", 0.0),
+            action_result.get("posture_reason", "missing posture evidence"),
         )
         return seated
 
-    def is_probably_seated_waving(self, action_result, owner_result):
-        if self.is_seated_waving(action_result, owner_result):
-            return True
-
+    @staticmethod
+    def confirmed_waving_posture(action_result):
         if not isinstance(action_result, dict):
-            return False
-        ground_relation = action_result.get("ground_relation")
-        if (
-            isinstance(ground_relation, dict)
-            and str(ground_relation.get("status", "") or "").strip().lower()
-            == "elevated"
-        ):
-            return True
-
-        candidate = owner_result.get("candidate", {}) if isinstance(owner_result, dict) else {}
-        if not isinstance(candidate, dict) or bool(candidate.get("lying_pose", False)):
-            return False
-        bbox = candidate.get("bbox")
-        if not bbox or len(bbox) < 4:
-            return False
+            return "unknown"
         try:
-            width = float(bbox[2]) - float(bbox[0])
-            height = float(bbox[3]) - float(bbox[1])
-            aspect_ratio = width / max(1.0, height)
+            confidence = float(action_result.get("posture_confidence", 0.0))
         except (TypeError, ValueError):
-            return False
-        return 0.35 <= aspect_ratio < self.lying_aspect_ratio_threshold
+            return "unknown"
+        posture = str(action_result.get("posture", "unknown")).strip().lower()
+        if not math.isfinite(confidence) or confidence < 0.50:
+            return "unknown"
+        return posture if posture in {"sitting", "standing"} else "unknown"
+
+    def is_probably_seated_waving(self, action_result, owner_result):
+        return self.is_seated_waving(action_result, owner_result)
 
     def handle_waving_two_stage_interaction(self, action_result, owner_result):
         if not self.seated_waving_two_stage_enabled:
             return self.handle_waving_interaction(action_result, owner_result)
 
+        seated_waving = self.is_probably_seated_waving(
+            action_result,
+            owner_result,
+        )
+        posture = self.confirmed_waving_posture(action_result)
+        waving_standoff_distance = (
+            self.standing_waving_standoff_distance
+            if posture == "standing"
+            else self.seated_waving_standoff_distance
+        )
+        if seated_waving:
+            self.speak("识别到主人挥手且正坐着", wait=True)
         self.approach_debug_event(
             "waving_interaction_started",
             mode="waving_two_stage",
@@ -583,9 +753,11 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             "owner_interaction_started",
             owner_name=(owner_result or {}).get("owner_name", self.owner_name),
             action="waving",
+            posture=posture,
             place=(action_result or {}).get("place", "unknown"),
             approach_mode="waving_two_stage",
             approach_stage="coarse",
+            approach_direction="owner_front",
         )
         rospy.loginfo(
             "Waving approach stage 1/2: coarse standoff=%.2fm",
@@ -631,8 +803,9 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         )
         approached = self.approach_owner(
             refined_owner_result,
-            self.waving_standoff_distance,
+            waving_standoff_distance,
             waving=True,
+            waving_front_only=True,
         )
         if approached:
             self.handle_owner_help(refined_owner_result)
@@ -716,6 +889,18 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         return owner_result
 
     def handle_waving_interaction(self, action_result, owner_result):
+        seated_waving = self.is_probably_seated_waving(
+            action_result,
+            owner_result,
+        )
+        posture = self.confirmed_waving_posture(action_result)
+        waving_standoff_distance = (
+            self.standing_waving_standoff_distance
+            if posture == "standing"
+            else self.seated_waving_standoff_distance
+        )
+        if seated_waving:
+            self.speak("识别到主人挥手且正坐着", wait=True)
         self.approach_debug_event(
             "waving_interaction_started",
             mode="waving",
@@ -726,13 +911,16 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
             "owner_interaction_started",
             owner_name=(owner_result or {}).get("owner_name", self.owner_name),
             action="waving",
+            posture=posture,
             place=(action_result or {}).get("place", "unknown"),
             approach_mode="waving",
+            approach_direction="owner_front",
         )
         approached = self.approach_owner(
             owner_result,
-            self.waving_standoff_distance,
+            waving_standoff_distance,
             waving=True,
+            waving_front_only=True,
         )
         if (
             not approached
@@ -926,8 +1114,19 @@ class OptimizedOwnerVoiceReid(OwnerVoiceReidTest):
         self.init_face_recognizer()
 
         self.set_workflow_state(WorkflowState.REGISTER_OWNERS, reason="load_or_record_profiles")
-        if self.reuse_existing_profile and self.load_all_owner_profiles():
-            rospy.loginfo("Loaded existing owner Re-ID profiles from %s", self.profile_dir)
+        if self.reuse_existing_profile:
+            rospy.loginfo(
+                "Reusing owner profile: directory=%s owner_index=%d",
+                self.profile_dir,
+                self.reuse_owner_index,
+            )
+            if not self.load_all_owner_profiles():
+                raise RuntimeError(
+                    "reuse_existing_profile requested, but owner profile %d could not be loaded "
+                    "from %s; no new profiles were recorded"
+                    % (self.reuse_owner_index, self.profile_dir)
+                )
+            rospy.loginfo("Loaded existing owner profile from %s", self.profile_dir)
         else:
             self.record_all_owners()
         if not self.owner_profiles:

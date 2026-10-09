@@ -1,9 +1,9 @@
 {
-  "created_at": "2026-09-17 17:59:22",
+  "created_at": "2026-10-09 18:41:22",
   "backend": "torchreid",
   "model_name": "osnet_x0_25",
   "model_path": "",
-  "device": "cpu",
+  "device": "cuda:0",
   "match_threshold": 0.7,
   "lying_pose_enhancement": true,
   "lying_match_threshold": 0.6,
@@ -13,152 +13,1518 @@
   "samples": [
     {
       "index": 1,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639160750.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_001_1791542459022.jpg",
       "bbox": [
-        433,
+        150,
+        5,
+        734,
+        539
+      ],
+      "crop_bbox": [
+        104,
+        0,
+        780,
+        539
+      ],
+      "det_score": 0.9174410104751587,
+      "area_ratio": 0.601574074074074
+    },
+    {
+      "index": 2,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_002_1791542459275.jpg",
+      "bbox": [
+        203,
+        2,
+        693,
+        539
+      ],
+      "crop_bbox": [
+        164,
+        0,
+        732,
+        539
+      ],
+      "det_score": 0.9008821249008179,
+      "area_ratio": 0.5075810185185186
+    },
+    {
+      "index": 3,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_003_1791542459542.jpg",
+      "bbox": [
+        257,
+        0,
+        686,
+        539
+      ],
+      "crop_bbox": [
+        223,
+        0,
+        720,
+        539
+      ],
+      "det_score": 0.8870887160301208,
+      "area_ratio": 0.4460474537037037
+    },
+    {
+      "index": 4,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_004_1791542459814.jpg",
+      "bbox": [
+        301,
+        0,
+        686,
+        539
+      ],
+      "crop_bbox": [
+        271,
+        0,
+        716,
+        539
+      ],
+      "det_score": 0.9142463803291321,
+      "area_ratio": 0.40029899691358023
+    },
+    {
+      "index": 5,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_005_1791542460073.jpg",
+      "bbox": [
+        312,
+        0,
+        677,
+        539
+      ],
+      "crop_bbox": [
+        283,
+        0,
+        706,
+        539
+      ],
+      "det_score": 0.9136030077934265,
+      "area_ratio": 0.37950424382716047
+    },
+    {
+      "index": 6,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_006_1791542460346.jpg",
+      "bbox": [
+        319,
+        14,
+        674,
+        539
+      ],
+      "crop_bbox": [
+        291,
+        0,
+        702,
+        539
+      ],
+      "det_score": 0.9141846895217896,
+      "area_ratio": 0.35951967592592593
+    },
+    {
+      "index": 7,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 7,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_007_1791542460615.jpg",
+      "bbox": [
+        316,
+        14,
+        661,
+        539
+      ],
+      "crop_bbox": [
+        289,
+        0,
+        688,
+        539
+      ],
+      "det_score": 0.9149537682533264,
+      "area_ratio": 0.3493923611111111
+    },
+    {
+      "index": 8,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 8,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_008_1791542460879.jpg",
+      "bbox": [
+        321,
+        1,
+        662,
+        539
+      ],
+      "crop_bbox": [
+        294,
+        0,
+        689,
+        539
+      ],
+      "det_score": 0.9177606105804443,
+      "area_ratio": 0.35389274691358025
+    },
+    {
+      "index": 9,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 9,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_009_1791542461153.jpg",
+      "bbox": [
+        335,
+        11,
+        662,
+        539
+      ],
+      "crop_bbox": [
+        309,
+        0,
+        688,
+        539
+      ],
+      "det_score": 0.9175267815589905,
+      "area_ratio": 0.33305555555555555
+    },
+    {
+      "index": 10,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 10,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_010_1791542461410.jpg",
+      "bbox": [
+        330,
+        17,
+        666,
+        539
+      ],
+      "crop_bbox": [
+        304,
+        0,
+        692,
+        539
+      ],
+      "det_score": 0.9060378670692444,
+      "area_ratio": 0.3383333333333333
+    },
+    {
+      "index": 11,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 11,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_011_1791542461689.jpg",
+      "bbox": [
+        325,
+        32,
+        711,
+        539
+      ],
+      "crop_bbox": [
+        295,
+        0,
+        741,
+        539
+      ],
+      "det_score": 0.9070004820823669,
+      "area_ratio": 0.3775115740740741
+    },
+    {
+      "index": 12,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 12,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_012_1791542461964.jpg",
+      "bbox": [
+        314,
+        34,
+        732,
+        539
+      ],
+      "crop_bbox": [
+        281,
+        0,
+        765,
+        539
+      ],
+      "det_score": 0.9199360609054565,
+      "area_ratio": 0.4071952160493827
+    },
+    {
+      "index": 13,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 13,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_013_1791542462222.jpg",
+      "bbox": [
+        283,
+        44,
+        723,
+        539
+      ],
+      "crop_bbox": [
+        248,
+        0,
+        758,
+        539
+      ],
+      "det_score": 0.9182502627372742,
+      "area_ratio": 0.4201388888888889
+    },
+    {
+      "index": 14,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 14,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_014_1791542462472.jpg",
+      "bbox": [
+        260,
+        62,
+        730,
+        539
+      ],
+      "crop_bbox": [
+        223,
+        0,
+        767,
+        539
+      ],
+      "det_score": 0.913436770439148,
+      "area_ratio": 0.43246527777777777
+    },
+    {
+      "index": 15,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 15,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_015_1791542462722.jpg",
+      "bbox": [
+        253,
+        67,
+        729,
+        539
+      ],
+      "crop_bbox": [
+        215,
+        0,
+        767,
+        539
+      ],
+      "det_score": 0.9143120050430298,
+      "area_ratio": 0.43339506172839504
+    },
+    {
+      "index": 16,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 16,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_016_1791542463013.jpg",
+      "bbox": [
+        248,
+        72,
+        724,
+        539
+      ],
+      "crop_bbox": [
+        210,
+        0,
+        762,
+        539
+      ],
+      "det_score": 0.9202321171760559,
+      "area_ratio": 0.428804012345679
+    },
+    {
+      "index": 17,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 17,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_017_1791542463277.jpg",
+      "bbox": [
+        245,
+        73,
+        726,
+        539
+      ],
+      "crop_bbox": [
+        207,
+        0,
+        764,
+        539
+      ],
+      "det_score": 0.9259635806083679,
+      "area_ratio": 0.4323804012345679
+    },
+    {
+      "index": 18,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 18,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_018_1791542463544.jpg",
+      "bbox": [
+        250,
+        55,
+        717,
+        537
+      ],
+      "crop_bbox": [
+        213,
+        0,
+        754,
+        539
+      ],
+      "det_score": 0.9177771806716919,
+      "area_ratio": 0.4342091049382716
+    },
+    {
+      "index": 19,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 19,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_019_1791542463816.jpg",
+      "bbox": [
+        262,
+        37,
+        700,
+        539
+      ],
+      "crop_bbox": [
+        227,
+        0,
+        735,
+        539
+      ],
+      "det_score": 0.9117236733436584,
+      "area_ratio": 0.4241435185185185
+    },
+    {
+      "index": 20,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 20,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_020_1791542464081.jpg",
+      "bbox": [
+        281,
+        13,
+        671,
+        539
+      ],
+      "crop_bbox": [
+        250,
+        0,
+        702,
+        539
+      ],
+      "det_score": 0.9212144017219543,
+      "area_ratio": 0.3957175925925926
+    },
+    {
+      "index": 21,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 21,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_021_1791542464349.jpg",
+      "bbox": [
+        282,
+        12,
+        628,
+        539
+      ],
+      "crop_bbox": [
+        255,
+        0,
+        655,
+        539
+      ],
+      "det_score": 0.9227122664451599,
+      "area_ratio": 0.35173996913580247
+    },
+    {
+      "index": 22,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 22,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_022_1791542464605.jpg",
+      "bbox": [
+        277,
+        17,
+        601,
+        539
+      ],
+      "crop_bbox": [
+        252,
         0,
         626,
         539
       ],
-      "crop_bbox": [
-        418,
-        0,
-        641,
-        539
-      ],
-      "det_score": 0.9349690675735474,
-      "area_ratio": 0.20066936728395063
+      "det_score": 0.9165348410606384,
+      "area_ratio": 0.32625
     },
     {
-      "index": 2,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639161047.jpg",
+      "index": 23,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 23,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_023_1791542464878.jpg",
       "bbox": [
-        433,
+        276,
         0,
-        625,
+        599,
         539
       ],
       "crop_bbox": [
-        418,
-        0,
-        640,
-        539
-      ],
-      "det_score": 0.9338667988777161,
-      "area_ratio": 0.19962962962962963
-    },
-    {
-      "index": 3,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639161351.jpg",
-      "bbox": [
-        433,
-        0,
-        625,
-        539
-      ],
-      "crop_bbox": [
-        418,
-        0,
-        640,
-        539
-      ],
-      "det_score": 0.9347314238548279,
-      "area_ratio": 0.19962962962962963
-    },
-    {
-      "index": 4,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639161647.jpg",
-      "bbox": [
-        433,
-        0,
-        625,
-        539
-      ],
-      "crop_bbox": [
-        418,
-        0,
-        640,
-        539
-      ],
-      "det_score": 0.9339619278907776,
-      "area_ratio": 0.19962962962962963
-    },
-    {
-      "index": 5,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639161958.jpg",
-      "bbox": [
-        433,
+        251,
         0,
         624,
         539
       ],
-      "crop_bbox": [
-        418,
-        0,
-        639,
-        539
-      ],
-      "det_score": 0.9331268668174744,
-      "area_ratio": 0.19858989197530863
+      "det_score": 0.9256048798561096,
+      "area_ratio": 0.335835262345679
     },
     {
-      "index": 6,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639162275.jpg",
+      "index": 24,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 24,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_024_1791542465152.jpg",
       "bbox": [
+        283,
+        3,
+        602,
+        539
+      ],
+      "crop_bbox": [
+        258,
+        0,
+        627,
+        539
+      ],
+      "det_score": 0.9256640076637268,
+      "area_ratio": 0.32983024691358026
+    },
+    {
+      "index": 25,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 25,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_025_1791542465424.jpg",
+      "bbox": [
+        276,
+        6,
+        596,
+        539
+      ],
+      "crop_bbox": [
+        251,
+        0,
+        621,
+        539
+      ],
+      "det_score": 0.9215190410614014,
+      "area_ratio": 0.32901234567901233
+    },
+    {
+      "index": 26,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 26,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_026_1791542465689.jpg",
+      "bbox": [
+        268,
+        4,
+        594,
+        539
+      ],
+      "crop_bbox": [
+        242,
+        0,
+        620,
+        539
+      ],
+      "det_score": 0.9154607653617859,
+      "area_ratio": 0.33643904320987655
+    },
+    {
+      "index": 27,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 27,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_027_1791542465961.jpg",
+      "bbox": [
+        259,
+        0,
+        595,
+        539
+      ],
+      "crop_bbox": [
+        233,
+        0,
+        621,
+        539
+      ],
+      "det_score": 0.9135616421699524,
+      "area_ratio": 0.34935185185185186
+    },
+    {
+      "index": 28,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 28,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_028_1791542466226.jpg",
+      "bbox": [
+        266,
+        4,
+        608,
+        539
+      ],
+      "crop_bbox": [
+        239,
+        0,
+        635,
+        539
+      ],
+      "det_score": 0.8984415531158447,
+      "area_ratio": 0.3529513888888889
+    },
+    {
+      "index": 29,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 29,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_029_1791542466506.jpg",
+      "bbox": [
+        204,
+        17,
+        604,
+        539
+      ],
+      "crop_bbox": [
+        172,
+        0,
+        636,
+        539
+      ],
+      "det_score": 0.9221774339675903,
+      "area_ratio": 0.4027777777777778
+    },
+    {
+      "index": 30,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "pose_sample": 30,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_030_1791542466766.jpg",
+      "bbox": [
+        161,
+        23,
+        612,
+        539
+      ],
+      "crop_bbox": [
+        125,
+        0,
+        648,
+        539
+      ],
+      "det_score": 0.9331474900245667,
+      "area_ratio": 0.448912037037037
+    },
+    {
+      "index": 31,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 1,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_031_1791542474105.jpg",
+      "bbox": [
+        446,
+        22,
+        563,
+        539
+      ],
+      "crop_bbox": [
+        437,
+        0,
+        572,
+        539
+      ],
+      "det_score": 0.8770052790641785,
+      "area_ratio": 0.11668402777777778
+    },
+    {
+      "index": 32,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 2,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_032_1791542474376.jpg",
+      "bbox": [
+        448,
+        20,
+        562,
+        539
+      ],
+      "crop_bbox": [
+        439,
+        0,
+        571,
+        539
+      ],
+      "det_score": 0.8701432347297668,
+      "area_ratio": 0.11413194444444444
+    },
+    {
+      "index": 33,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 3,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_033_1791542474643.jpg",
+      "bbox": [
+        448,
+        24,
+        563,
+        539
+      ],
+      "crop_bbox": [
+        439,
+        0,
+        572,
+        539
+      ],
+      "det_score": 0.8587415218353271,
+      "area_ratio": 0.11424575617283951
+    },
+    {
+      "index": 34,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 4,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_034_1791542474907.jpg",
+      "bbox": [
+        439,
+        27,
+        561,
+        539
+      ],
+      "crop_bbox": [
+        430,
+        0,
+        570,
+        539
+      ],
+      "det_score": 0.8561068773269653,
+      "area_ratio": 0.12049382716049382
+    },
+    {
+      "index": 35,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 5,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_035_1791542475171.jpg",
+      "bbox": [
+        440,
+        24,
+        558,
+        539
+      ],
+      "crop_bbox": [
+        431,
+        0,
+        567,
+        539
+      ],
+      "det_score": 0.8649531602859497,
+      "area_ratio": 0.11722608024691358
+    },
+    {
+      "index": 36,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 6,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_036_1791542475455.jpg",
+      "bbox": [
+        434,
+        22,
+        556,
+        539
+      ],
+      "crop_bbox": [
+        425,
+        0,
+        565,
+        539
+      ],
+      "det_score": 0.8727104663848877,
+      "area_ratio": 0.12167052469135803
+    },
+    {
+      "index": 37,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 7,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_037_1791542475711.jpg",
+      "bbox": [
+        440,
+        16,
+        556,
+        539
+      ],
+      "crop_bbox": [
+        431,
+        0,
+        565,
+        539
+      ],
+      "det_score": 0.8684057593345642,
+      "area_ratio": 0.11702932098765433
+    },
+    {
+      "index": 38,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 8,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_038_1791542475972.jpg",
+      "bbox": [
+        422,
+        14,
+        563,
+        539
+      ],
+      "crop_bbox": [
+        411,
+        0,
+        574,
+        539
+      ],
+      "det_score": 0.888252317905426,
+      "area_ratio": 0.1427951388888889
+    },
+    {
+      "index": 39,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 9,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_039_1791542476249.jpg",
+      "bbox": [
+        408,
+        16,
+        564,
+        539
+      ],
+      "crop_bbox": [
+        396,
+        0,
+        576,
+        539
+      ],
+      "det_score": 0.9056897163391113,
+      "area_ratio": 0.15738425925925925
+    },
+    {
+      "index": 40,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 10,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_040_1791542476512.jpg",
+      "bbox": [
+        407,
+        11,
+        574,
+        539
+      ],
+      "crop_bbox": [
+        394,
+        0,
+        587,
+        539
+      ],
+      "det_score": 0.9067215919494629,
+      "area_ratio": 0.1700925925925926
+    },
+    {
+      "index": 41,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 11,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_041_1791542476776.jpg",
+      "bbox": [
+        412,
+        14,
+        577,
+        539
+      ],
+      "crop_bbox": [
+        399,
+        0,
+        590,
+        539
+      ],
+      "det_score": 0.9071218967437744,
+      "area_ratio": 0.16710069444444445
+    },
+    {
+      "index": 42,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 12,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_042_1791542477040.jpg",
+      "bbox": [
+        405,
+        12,
+        573,
+        539
+      ],
+      "crop_bbox": [
+        392,
+        0,
+        586,
+        539
+      ],
+      "det_score": 0.9112370610237122,
+      "area_ratio": 0.17078703703703704
+    },
+    {
+      "index": 43,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 13,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_043_1791542477310.jpg",
+      "bbox": [
+        400,
+        12,
+        570,
+        539
+      ],
+      "crop_bbox": [
+        387,
+        0,
+        583,
+        539
+      ],
+      "det_score": 0.9148564338684082,
+      "area_ratio": 0.17282021604938272
+    },
+    {
+      "index": 44,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 14,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_044_1791542477576.jpg",
+      "bbox": [
+        391,
+        11,
+        566,
+        539
+      ],
+      "crop_bbox": [
+        377,
+        0,
+        580,
+        539
+      ],
+      "det_score": 0.9143113493919373,
+      "area_ratio": 0.17824074074074073
+    },
+    {
+      "index": 45,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 15,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_045_1791542477845.jpg",
+      "bbox": [
+        388,
+        16,
+        566,
+        539
+      ],
+      "crop_bbox": [
+        374,
+        0,
+        580,
+        539
+      ],
+      "det_score": 0.9136878252029419,
+      "area_ratio": 0.17957947530864196
+    },
+    {
+      "index": 46,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 16,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_046_1791542478111.jpg",
+      "bbox": [
+        407,
+        20,
+        569,
+        539
+      ],
+      "crop_bbox": [
+        395,
+        0,
+        581,
+        539
+      ],
+      "det_score": 0.9039818644523621,
+      "area_ratio": 0.1621875
+    },
+    {
+      "index": 47,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 17,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_047_1791542478377.jpg",
+      "bbox": [
+        411,
+        19,
+        573,
+        539
+      ],
+      "crop_bbox": [
+        399,
+        0,
+        585,
+        539
+      ],
+      "det_score": 0.90384441614151,
+      "area_ratio": 0.1625
+    },
+    {
+      "index": 48,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 18,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_048_1791542478643.jpg",
+      "bbox": [
+        420,
+        18,
+        569,
+        539
+      ],
+      "crop_bbox": [
+        409,
+        0,
+        580,
+        539
+      ],
+      "det_score": 0.906827449798584,
+      "area_ratio": 0.14974729938271605
+    },
+    {
+      "index": 49,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 19,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_049_1791542478912.jpg",
+      "bbox": [
+        428,
+        19,
+        569,
+        539
+      ],
+      "crop_bbox": [
+        417,
+        0,
+        580,
+        539
+      ],
+      "det_score": 0.8826413750648499,
+      "area_ratio": 0.1414351851851852
+    },
+    {
+      "index": 50,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 20,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_050_1791542479175.jpg",
+      "bbox": [
+        438,
+        28,
+        570,
+        539
+      ],
+      "crop_bbox": [
+        428,
+        0,
+        580,
+        539
+      ],
+      "det_score": 0.8693073987960815,
+      "area_ratio": 0.13011574074074075
+    },
+    {
+      "index": 51,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 21,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_051_1791542479443.jpg",
+      "bbox": [
+        444,
+        25,
+        569,
+        539
+      ],
+      "crop_bbox": [
+        434,
+        0,
+        579,
+        539
+      ],
+      "det_score": 0.8681985139846802,
+      "area_ratio": 0.12393904320987655
+    },
+    {
+      "index": 52,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 22,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_052_1791542479711.jpg",
+      "bbox": [
+        443,
+        20,
+        572,
+        539
+      ],
+      "crop_bbox": [
         433,
         0,
-        624,
+        582,
+        539
+      ],
+      "det_score": 0.8687403202056885,
+      "area_ratio": 0.12914930555555557
+    },
+    {
+      "index": 53,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 23,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_053_1791542479974.jpg",
+      "bbox": [
+        444,
+        19,
+        575,
+        539
+      ],
+      "crop_bbox": [
+        434,
+        0,
+        585,
+        539
+      ],
+      "det_score": 0.8718745112419128,
+      "area_ratio": 0.1314043209876543
+    },
+    {
+      "index": 54,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 24,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_054_1791542480245.jpg",
+      "bbox": [
+        439,
+        20,
+        574,
+        539
+      ],
+      "crop_bbox": [
+        429,
+        0,
+        584,
+        539
+      ],
+      "det_score": 0.8782012462615967,
+      "area_ratio": 0.13515625
+    },
+    {
+      "index": 55,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 25,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_055_1791542480511.jpg",
+      "bbox": [
+        421,
+        25,
+        581,
+        539
+      ],
+      "crop_bbox": [
+        409,
+        0,
+        593,
+        539
+      ],
+      "det_score": 0.9092909097671509,
+      "area_ratio": 0.15864197530864196
+    },
+    {
+      "index": 56,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 26,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_056_1791542480770.jpg",
+      "bbox": [
+        412,
+        19,
+        585,
+        539
+      ],
+      "crop_bbox": [
+        399,
+        0,
+        598,
+        539
+      ],
+      "det_score": 0.907636821269989,
+      "area_ratio": 0.17353395061728394
+    },
+    {
+      "index": 57,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 27,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_057_1791542481045.jpg",
+      "bbox": [
+        406,
+        18,
+        580,
+        539
+      ],
+      "crop_bbox": [
+        393,
+        0,
+        593,
+        539
+      ],
+      "det_score": 0.9071513414382935,
+      "area_ratio": 0.17487268518518517
+    },
+    {
+      "index": 58,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 28,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_058_1791542481307.jpg",
+      "bbox": [
+        406,
+        13,
+        581,
+        539
+      ],
+      "crop_bbox": [
+        392,
+        0,
+        595,
+        539
+      ],
+      "det_score": 0.9064091444015503,
+      "area_ratio": 0.1775655864197531
+    },
+    {
+      "index": 59,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 29,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_059_1791542481574.jpg",
+      "bbox": [
+        431,
+        17,
+        603,
         539
       ],
       "crop_bbox": [
         418,
         0,
-        639,
+        616,
         539
       ],
-      "det_score": 0.9349931478500366,
-      "area_ratio": 0.19858989197530863
+      "det_score": 0.9208880662918091,
+      "area_ratio": 0.17319444444444446
+    },
+    {
+      "index": 60,
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身",
+      "pose_sample": 30,
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_full_body_front_to_side_060_1791542481843.jpg",
+      "bbox": [
+        431,
+        15,
+        603,
+        539
+      ],
+      "crop_bbox": [
+        418,
+        0,
+        616,
+        539
+      ],
+      "det_score": 0.9172205328941345,
+      "area_ratio": 0.17385802469135803
     }
   ],
   "has_face_embedding": true,
   "face_samples": [
     {
       "sample": 1,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_001_1789639160750.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_001_1791542459022.jpg",
       "region": "upper",
       "face_count": 1
     },
     {
       "sample": 2,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_002_1789639161047.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_002_1791542459275.jpg",
       "region": "upper",
       "face_count": 1
     },
     {
       "sample": 3,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_003_1789639161351.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_003_1791542459542.jpg",
       "region": "upper",
       "face_count": 1
     },
     {
       "sample": 4,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_004_1789639161647.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_004_1791542459814.jpg",
       "region": "upper",
       "face_count": 1
     },
     {
       "sample": 5,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_005_1789639161958.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_005_1791542460073.jpg",
       "region": "upper",
       "face_count": 1
     },
     {
       "sample": 6,
-      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_006_1789639162275.jpg",
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_006_1791542460346.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 7,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_007_1791542460615.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 8,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_008_1791542460879.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 9,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_009_1791542461153.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 10,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_010_1791542461410.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 11,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_011_1791542461689.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 12,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_012_1791542461964.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 13,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_013_1791542462222.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 14,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_014_1791542462472.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 15,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_015_1791542462722.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 16,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_016_1791542463013.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 17,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_017_1791542463277.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 18,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_018_1791542463544.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 19,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_019_1791542463816.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 20,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_020_1791542464081.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 21,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_021_1791542464349.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 22,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_022_1791542464605.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 23,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_023_1791542464878.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 24,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_024_1791542465152.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 25,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_025_1791542465424.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 26,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_026_1791542465689.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 27,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_027_1791542465961.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 28,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_028_1791542466226.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 29,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_029_1791542466506.jpg",
+      "region": "upper",
+      "face_count": 1
+    },
+    {
+      "sample": 30,
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸",
+      "image": "/home/ubuntu20/catkin_ws/src/wpb_task1_owner_search/data/reid_owner_voice/samples/owner_face_front_to_side_030_1791542466766.jpg",
       "region": "upper",
       "face_count": 1
     }
   ],
+  "record_poses": [
+    {
+      "pose": "face_front_to_side",
+      "pose_name": "近距离正脸转侧脸"
+    },
+    {
+      "pose": "full_body_front_to_side",
+      "pose_name": "远距离正面转侧身"
+    }
+  ],
   "owner_index": 2,
-  "owner_name": "张博瑞"
+  "owner_name": "张三"
 }

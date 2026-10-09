@@ -38,6 +38,15 @@ if SCRIPT_DIR not in sys.path:
 
 from person_reid_owner_test import PersonReidOwnerTest
 
+DEFAULT_ACTION_DIAGNOSTICS_LOG_PATH = os.path.abspath(
+    os.path.join(
+        SCRIPT_DIR,
+        "..",
+        "logs",
+        "optimized_action_diagnostics.jsonl",
+    )
+)
+
 
 class OwnerVoiceReidTest(PersonReidOwnerTest):
     def __init__(self):
@@ -105,6 +114,10 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         )
         self.max_name_length = max(1, int(rospy.get_param("~max_name_length", 12)))
         self.owner_count = max(1, int(rospy.get_param("~owner_count", 3)))
+        self.reuse_owner_index = max(
+            1,
+            int(rospy.get_param("~reuse_owner_index", 1)),
+        )
         self.owner_profiles = []
         self.skipped_owner_indices = []
         self.current_owner_index = 1
@@ -174,6 +187,22 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "/owner_voice_reid_test/action_result",
             )
         ).strip()
+        self.action_diagnostics_log_path = os.path.abspath(
+            os.path.expanduser(
+                str(
+                    rospy.get_param(
+                        "~action_diagnostics_log_path",
+                        DEFAULT_ACTION_DIAGNOSTICS_LOG_PATH,
+                    )
+                )
+            )
+        )
+        self.action_diagnostics_session_id = str(
+            rospy.get_param(
+                "~action_diagnostics_session_id",
+                "%s-%d" % (time.strftime("%Y%m%d-%H%M%S"), os.getpid()),
+            )
+        ).strip()
         self.action_timeout = max(
             15.0,
             float(rospy.get_param("~action_timeout", 150.0)),
@@ -182,12 +211,6 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             0.2,
             float(rospy.get_param("~action_speech_grace", 1.0)),
         )
-        self.action_lying_bed_speech = str(
-            rospy.get_param(
-                "~action_lying_bed_speech",
-                "主人正躺在床上。",
-            )
-        ).strip() or "主人正躺在床上。"
         self.action_show_window = bool(
             rospy.get_param("~action_show_window", False)
         )
@@ -708,19 +731,19 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
 
         self.name_prompt_text = rospy.get_param(
             "~name_prompt_text",
-            "请按照姓名加名字的格式说出姓名，例如姓名张三。",
+            "请按照姓名加名字的格式说出姓名",
         )
         self.indexed_name_prompt_text = rospy.get_param(
             "~indexed_name_prompt_text",
-            "请第%s位主人按照姓名加名字的格式说出姓名，例如姓名张三。",
+            "请第%s位主人按照姓名加名字的格式说出姓名",
         )
         self.name_confirm_prompt_text = rospy.get_param(
             "~name_confirm_prompt_text",
-            "姓名%s是否正确？正确请说正确，错误请重说。",
+            "姓名%s是否正确？正确请说正确，错误请再说一遍。",
         )
         self.name_retry_text = rospy.get_param(
             "~name_retry_text",
-            "请按照姓名加名字的格式回答，例如姓名张三。",
+            "请按照姓名加名字的格式回答",
         )
         self.name_timeout_text = rospy.get_param("~name_timeout_text", "没有听到主人姓名。")
         self.name_invalid_text = rospy.get_param(
@@ -1322,7 +1345,6 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "pointcloud_wait_timeout:=%.3f" % self.pointcloud_nodelet_timeout,
                 "say_topic:=%s" % self.say_topic,
                 "result_topic:=%s" % self.action_result_topic,
-                "lying_bed_speech:=%s" % self.action_lying_bed_speech,
                 "show_window:=%s" % self.roslaunch_bool(self.action_show_window),
                 "auto_analyze:=true",
                 "auto_repeat_seconds:=0.0",
@@ -1353,6 +1375,9 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 "use_owner_roi:=%s" % self.roslaunch_bool(self.action_use_owner_roi),
                 "owner_roi:=%s" % self.action_owner_roi(owner_result),
                 "roi_padding:=%.3f" % self.action_roi_padding,
+                "diagnostics_log_path:=%s" % self.action_diagnostics_log_path,
+                "diagnostics_session_id:=%s"
+                % self.action_diagnostics_session_id,
             ]
             launch_parent = roslaunch.parent.ROSLaunchParent(
                 launch_uuid,
@@ -2348,7 +2373,12 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         )
         return accepted
 
-    def waving_owner_standoff_candidates(self, position, standoff_distance):
+    def waving_owner_standoff_candidates(
+        self,
+        position,
+        standoff_distance,
+        front_only=False,
+    ):
         owner_x = float(position.get("x", position.get("forward", 0.0)))
         owner_y = float(position.get("y", position.get("lateral", 0.0)))
         distance = math.hypot(owner_x, owner_y)
@@ -2365,8 +2395,14 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             min_distance,
             0.50,
         )
+        if front_only:
+            max_distance = max(max_distance, abs(float(standoff_distance)))
         requested = self.clamp_value(abs(float(standoff_distance)), min_distance, max_distance)
-        raw_distances = [requested] + list(self.waving_approach_candidate_distances)
+        raw_distances = (
+            [requested]
+            if front_only
+            else [requested] + list(self.waving_approach_candidate_distances)
+        )
         candidate_distances = []
         for raw_distance in raw_distances:
             try:
@@ -2382,18 +2418,21 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 if round(value, 2) not in [round(item, 2) for item in candidate_distances]:
                     candidate_distances.append(value)
 
-        angles = []
-        for raw_angle in self.waving_approach_candidate_angles_deg:
-            try:
-                value = float(raw_angle)
-            except (TypeError, ValueError):
-                continue
-            if math.isfinite(value):
-                angles.append(value)
-        if not angles:
-            angles = [65.0, -65.0, 95.0, -95.0, 35.0, -35.0, 0.0]
-        if all(abs(value) > 1e-3 for value in angles):
-            angles.append(0.0)
+        if front_only:
+            angles = [0.0]
+        else:
+            angles = []
+            for raw_angle in self.waving_approach_candidate_angles_deg:
+                try:
+                    value = float(raw_angle)
+                except (TypeError, ValueError):
+                    continue
+                if math.isfinite(value):
+                    angles.append(value)
+            if not angles:
+                angles = [65.0, -65.0, 95.0, -95.0, 35.0, -35.0, 0.0]
+            if all(abs(value) > 1e-3 for value in angles):
+                angles.append(0.0)
 
         near_side_angle = math.atan2(-owner_y, -owner_x)
         candidates = []
@@ -2431,6 +2470,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         timeout=None,
         label="waving owner approach",
         lidar_guard_distance=None,
+        front_only=False,
     ):
         if not self.waving_approach_candidate_enabled:
             return self.navigate_to_owner_standoff(
@@ -2443,11 +2483,16 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         if not self.ensure_move_base_for_approach():
             return False
 
-        candidates = self.waving_owner_standoff_candidates(position, standoff_distance)
+        candidates = self.waving_owner_standoff_candidates(
+            position,
+            standoff_distance,
+            front_only=front_only,
+        )
         self.approach_debug_event(
             "waving_candidates_generated",
             candidate_count=len(candidates),
             requested_standoff=float(standoff_distance),
+            front_only=bool(front_only),
             owner_local_x=float(position.get("x", position.get("forward", 0.0))),
             owner_local_y=float(position.get("y", position.get("lateral", 0.0))),
             candidates=[
@@ -2627,6 +2672,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         standoff_distance,
         waving=False,
         lidar_guard_distance_override=None,
+        waving_front_only=False,
     ):
         if not self.interaction_enabled or not self.approach_enabled:
             rospy.loginfo("Owner approach disabled")
@@ -2699,6 +2745,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                 timeout=self.approach_navigation_timeout,
                 label="waving owner approach",
                 lidar_guard_distance=lidar_guard_distance,
+                front_only=waving_front_only,
             )
         else:
             approached = self.navigate_to_owner_standoff(
@@ -3987,8 +4034,34 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         loaded_profiles = []
         self.owner_profiles = []
         original_owner_name = self.owner_name
-        for owner_index in range(1, self.owner_count + 1):
+        owner_indices = (
+            [self.reuse_owner_index]
+            if self.reuse_existing_profile
+            else list(range(1, self.owner_count + 1))
+        )
+        for owner_index in owner_indices:
             self.select_owner_profile_path(owner_index)
+            missing_paths = [
+                path
+                for path in (self.profile_path, self.metadata_path)
+                if not os.path.isfile(path)
+            ]
+            if missing_paths:
+                rospy.logerr(
+                    "Owner profile %d cannot be reused; missing files: %s",
+                    owner_index,
+                    ", ".join(missing_paths),
+                )
+                self.publish_status(
+                    "profile_load_failed",
+                    owner_index=owner_index,
+                    profile_path=self.profile_path,
+                    metadata_path=self.metadata_path,
+                    reason="missing profile files",
+                )
+                self.owner_name = original_owner_name
+                self.owner_profiles = []
+                return False
             self.owner_name = ""
             self.owner_embedding = None
             self.owner_embedding_bank = None
@@ -3996,11 +4069,71 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             self.owner_face_embedding = None
             self.owner_face_embedding_bank = None
             self.owner_profile_meta = {}
-            if not self.load_owner_profile():
+            try:
+                loaded = self.load_owner_profile()
+            except Exception as exc:
+                rospy.logerr(
+                    "Owner profile %d cannot be reused: profile=%s metadata=%s error=%s",
+                    owner_index,
+                    self.profile_path,
+                    self.metadata_path,
+                    exc,
+                )
+                self.publish_status(
+                    "profile_load_failed",
+                    owner_index=owner_index,
+                    profile_path=self.profile_path,
+                    metadata_path=self.metadata_path,
+                    reason=str(exc),
+                )
                 self.owner_name = original_owner_name
                 self.owner_profiles = []
                 return False
-            self.owner_name = self.owner_profile_meta.get("owner_name", "")
+            if not loaded:
+                rospy.logerr(
+                    "Owner profile %d cannot be reused: %s",
+                    owner_index,
+                    self.profile_path,
+                )
+                self.owner_name = original_owner_name
+                self.owner_profiles = []
+                return False
+            if self.face_verify_enabled and self.face_model_ready:
+                if self.owner_face_embedding_bank is None:
+                    rospy.logerr(
+                        "Owner profile %d has no face embedding while face verification is enabled: %s",
+                        owner_index,
+                        self.profile_path,
+                    )
+                    self.owner_name = original_owner_name
+                    self.owner_profiles = []
+                    return False
+            stored_index = self.owner_profile_meta.get("owner_index")
+            try:
+                stored_index = None if stored_index is None else int(stored_index)
+            except (TypeError, ValueError):
+                stored_index = None
+            if stored_index is not None and stored_index != owner_index:
+                rospy.logerr(
+                    "Owner profile index mismatch: expected=%d stored=%s path=%s",
+                    owner_index,
+                    stored_index,
+                    self.metadata_path,
+                )
+                self.owner_name = original_owner_name
+                self.owner_profiles = []
+                return False
+            self.owner_name = str(
+                self.owner_profile_meta.get("owner_name", "") or ""
+            ).strip()
+            if not self.owner_name:
+                rospy.logerr(
+                    "Owner profile %d has no stored owner name: %s",
+                    owner_index,
+                    self.metadata_path,
+                )
+                self.owner_profiles = []
+                return False
             self.remember_current_owner_profile()
             loaded_profiles.append(self.owner_name or "主人%d" % owner_index)
         self.owner_profiles = sorted(self.owner_profiles, key=lambda item: item["index"])
@@ -4010,9 +4143,10 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             count=len(self.owner_profiles),
             names=loaded_profiles,
             face_ready=self.face_ready,
+            owner_indices=owner_indices,
         )
         rospy.loginfo("Loaded %d owner profiles: %s", len(self.owner_profiles), ", ".join(loaded_profiles))
-        return len(self.owner_profiles) == self.owner_count
+        return len(self.owner_profiles) == len(owner_indices)
 
     def save_owner_profile(self, embeddings, sample_meta, color_embeddings=None):
         super().save_owner_profile(embeddings, sample_meta, color_embeddings=color_embeddings)
@@ -4028,7 +4162,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
                     npz_payload = {name: profile_file[name] for name in profile_file.files}
                 npz_payload["face_embedding"] = self.owner_face_embedding.astype(np.float32)
                 npz_payload["face_embedding_bank"] = self.owner_face_embedding_bank
-                np.savez(self.profile_path, **npz_payload)
+                self.atomic_save_npz(self.profile_path, npz_payload)
                 self.owner_profile_meta["has_face_embedding"] = True
                 self.owner_profile_meta["face_samples"] = [
                     {
@@ -4058,8 +4192,7 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         if self.owner_name:
             self.owner_profile_meta["owner_index"] = self.current_owner_index
             self.owner_profile_meta["owner_name"] = self.owner_name
-            with open(self.metadata_path, "w", encoding="utf-8") as metadata_file:
-                json.dump(self.owner_profile_meta, metadata_file, ensure_ascii=False, indent=2)
+            self.atomic_save_json(self.metadata_path, self.owner_profile_meta)
             self.publish_status(
                 "profile_named",
                 owner_index=self.current_owner_index,
@@ -4130,18 +4263,12 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         color_score = self.owner_color_similarity(owner_profile, crop)
         if lying_pose:
             score = self.fused_lie_score(reid_score, color_score)
-            face_weight = self.lying_face_identity_weight
+            identity_score = score
         else:
             score = reid_score
-            face_weight = self.face_identity_weight
         face_score = self.owner_face_similarity(owner_profile, face_embedding)
-        identity_score = score
-        if face_score is not None:
-            face_score_for_fusion = max(0.0, face_score)
-            identity_score = (
-                (1.0 - face_weight) * score
-                + face_weight * face_score_for_fusion
-            )
+        if not lying_pose:
+            identity_score = face_score if face_score is not None else -1.0
         return score, reid_score, color_score, face_score, identity_score
 
     def result_is_match(self, result, default_threshold):
@@ -4156,26 +4283,13 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
             return False
 
         face_score = result.get("face_score")
-        reid_score = float(result.get("reid_score", result.get("score", -1.0)))
         lying_pose = bool(result.get("candidate", {}).get("lying_pose", False))
         if lying_pose:
             return PersonReidOwnerTest.result_is_match(result, default_threshold)
 
-        if face_score is not None:
-            face_score = float(face_score)
-            identity_score = float(result.get("identity_score", result.get("score", -1.0)))
-            threshold = float(result.get("match_threshold", default_threshold))
-            if (
-                face_score >= self.face_accept_threshold
-                and reid_score >= self.face_min_reid_score
-                and identity_score >= threshold
-            ):
-                return True
-            if self.face_fast_reject and face_score <= self.face_reject_threshold:
-                return False
-            return identity_score >= threshold and reid_score >= self.face_min_reid_score
-
-        return PersonReidOwnerTest.result_is_match(result, default_threshold)
+        if face_score is None:
+            return False
+        return float(face_score) >= self.face_accept_threshold
 
     def evaluate_current_frame(self):
         if not self.owner_profiles:
@@ -4190,11 +4304,22 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         query_crops = []
         records = []
         for candidate in candidates:
-            lying_pose = self.is_lying_candidate(candidate)
-            padding = self.lying_crop_padding if lying_pose else self.crop_padding
-            crop, crop_bbox = self.crop_candidate(image, candidate, padding=padding)
+            crop, crop_bbox = self.crop_candidate(
+                image,
+                candidate,
+                padding=self.crop_padding,
+            )
             if crop is None:
                 continue
+            lying_pose = self.is_lying_candidate(candidate, crop=crop)
+            if lying_pose and self.lying_crop_padding > self.crop_padding:
+                crop, crop_bbox = self.crop_candidate(
+                    image,
+                    candidate,
+                    padding=self.lying_crop_padding,
+                )
+                if crop is None:
+                    continue
             meta = dict(candidate)
             meta["crop_bbox"] = crop_bbox
             meta["lying_pose"] = lying_pose
@@ -4474,7 +4599,18 @@ class OwnerVoiceReidTest(PersonReidOwnerTest):
         self.update_yolo_window("相机已连接")
         self.init_reid_backend()
         self.init_face_recognizer()
-        if self.reuse_existing_profile and self.load_all_owner_profiles():
+        if self.reuse_existing_profile:
+            rospy.loginfo(
+                "Reusing owner profile: directory=%s owner_index=%d",
+                self.profile_dir,
+                self.reuse_owner_index,
+            )
+            if not self.load_all_owner_profiles():
+                raise RuntimeError(
+                    "reuse_existing_profile requested, but owner profiles could not be loaded "
+                    "from %s; no new profiles were recorded"
+                    % self.profile_dir
+                )
             rospy.loginfo("Loaded existing owner Re-ID profiles from %s", self.profile_dir)
         else:
             self.record_all_owners()

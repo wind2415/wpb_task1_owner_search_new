@@ -39,6 +39,7 @@
   <exec_depend>wpb_home_bringup</exec_depend>
   <exec_depend>wpb_home_tutorials</exec_depend>
   <exec_depend>wpbh_local_planner</exec_depend>
+  <exec_depend>wpr_task1_owner_search</exec_depend>
   <exec_depend>wpr_simulation</exec_depend>
   <exec_depend>yoloworld_perception</exec_depend>
 </package>

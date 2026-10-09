@@ -17,6 +17,7 @@
   <arg name="navigate_enabled" default="true" />
   <arg name="reuse_existing_profile" default="false" />
   <arg name="owner_count" default="3" />
+  <arg name="reuse_owner_index" default="1" />
   <arg name="patrol_enabled" default="true" />
   <arg name="profile_dir" default="$(find wpb_task1_owner_search)/data/reid_owner_voice" />
   <arg name="front_recording_text" default="请靠近摄像头，保持正脸，然后慢慢转向侧脸，我会连续记录多张人脸特征。" />
@@ -31,18 +32,35 @@
   <arg name="full_body_front_to_side_record_seconds" default="8.0" />
   <arg name="full_body_front_to_side_record_sample_count" default="36" />
   <arg name="full_body_front_to_side_record_sample_interval" default="0.25" />
-  <arg name="optimized_seated_waving_aspect_ratio" default="0.55" />
+  <arg name="optimized_seated_waving_aspect_ratio" default="0.40" />
+  <arg name="seated_waving_upright_veto_ratio" default="0.50" />
+  <arg name="seated_waving_straight_knee_angle" default="160.0" />
   <arg name="seated_waving_two_stage_enabled" default="false" />
+  <arg name="seated_waving_standoff_distance" default="0.75" />
+  <arg name="standing_waving_standoff_distance" default="0.48" />
   <arg name="seated_waving_coarse_standoff_distance" default="1.00" />
   <arg name="seated_waving_refine_timeout" default="3.0" />
   <arg name="seated_waving_refine_required_matches" default="2" />
   <arg name="action_capture_duration" default="3.0" />
   <arg name="action_capture_frame_count" default="15" />
   <arg name="action_llm_frame_count" default="9" />
-  <arg name="action_lying_bed_speech" default="识别到主人躺在床上。" />
+  <arg name="action_use_owner_roi" default="true" />
+  <arg name="action_roi_padding" default="1.0" />
+  <arg name="action_pose_image_size" default="640" />
+  <arg name="action_diagnostics_log_path" default="$(find wpb_task1_owner_search)/logs/optimized_action_diagnostics.jsonl" />
+  <arg name="action_diagnostics_session_id" default="" />
+  <arg name="debug_label_topic" default="/owner_voice_reid_optimized/debug_label" />
   <arg name="optimized_waving_lidar_guard_distance" default="0.20" />
   <arg name="approach_debug_logging_enabled" default="true" />
   <arg name="approach_debug_tick_log_period" default="1.0" />
+  <arg name="pose_enabled" default="true" />
+  <arg name="pose_model_path" default="" />
+  <arg name="pose_device" default="cpu" />
+  <arg name="pose_image_size" default="416" />
+  <arg name="pose_confidence" default="0.25" />
+  <arg name="pose_iou" default="0.45" />
+  <arg name="pose_max_detections" default="4" />
+  <arg name="pose_lying_torso_verticality" default="0.45" />
   <arg name="yolo_node_type" default="yolopose_async.py" />
   <arg name="yolo_node_name" default="yolopose" />
   <arg name="yolo_model_path" default="$(find wpr_task1_owner_search)/models/pose/yolo11n-pose.pt" />
@@ -85,6 +103,7 @@
     <arg name="navigate_enabled" value="$(arg navigate_enabled)" />
     <arg name="reuse_existing_profile" value="$(arg reuse_existing_profile)" />
     <arg name="owner_count" value="$(arg owner_count)" />
+    <arg name="reuse_owner_index" value="$(arg reuse_owner_index)" />
     <arg name="patrol_enabled" value="$(arg patrol_enabled)" />
     <arg name="profile_dir" value="$(arg profile_dir)" />
     <arg name="front_recording_text" value="$(arg front_recording_text)" />
@@ -100,17 +119,34 @@
     <arg name="full_body_front_to_side_record_sample_count" value="$(arg full_body_front_to_side_record_sample_count)" />
     <arg name="full_body_front_to_side_record_sample_interval" value="$(arg full_body_front_to_side_record_sample_interval)" />
     <arg name="optimized_seated_waving_aspect_ratio" value="$(arg optimized_seated_waving_aspect_ratio)" />
+    <arg name="seated_waving_upright_veto_ratio" value="$(arg seated_waving_upright_veto_ratio)" />
+    <arg name="seated_waving_straight_knee_angle" value="$(arg seated_waving_straight_knee_angle)" />
     <arg name="seated_waving_two_stage_enabled" value="$(arg seated_waving_two_stage_enabled)" />
+    <arg name="seated_waving_standoff_distance" value="$(arg seated_waving_standoff_distance)" />
+    <arg name="standing_waving_standoff_distance" value="$(arg standing_waving_standoff_distance)" />
     <arg name="seated_waving_coarse_standoff_distance" value="$(arg seated_waving_coarse_standoff_distance)" />
     <arg name="seated_waving_refine_timeout" value="$(arg seated_waving_refine_timeout)" />
     <arg name="seated_waving_refine_required_matches" value="$(arg seated_waving_refine_required_matches)" />
     <arg name="action_capture_duration" value="$(arg action_capture_duration)" />
     <arg name="action_capture_frame_count" value="$(arg action_capture_frame_count)" />
     <arg name="action_llm_frame_count" value="$(arg action_llm_frame_count)" />
-    <arg name="action_lying_bed_speech" value="$(arg action_lying_bed_speech)" />
+    <arg name="action_use_owner_roi" value="$(arg action_use_owner_roi)" />
+    <arg name="action_roi_padding" value="$(arg action_roi_padding)" />
+    <arg name="action_pose_image_size" value="$(arg action_pose_image_size)" />
+    <arg name="action_diagnostics_log_path" value="$(arg action_diagnostics_log_path)" />
+    <arg name="action_diagnostics_session_id" value="$(arg action_diagnostics_session_id)" />
+    <arg name="debug_label_topic" value="$(arg debug_label_topic)" />
     <arg name="optimized_waving_lidar_guard_distance" value="$(arg optimized_waving_lidar_guard_distance)" />
     <arg name="approach_debug_logging_enabled" value="$(arg approach_debug_logging_enabled)" />
     <arg name="approach_debug_tick_log_period" value="$(arg approach_debug_tick_log_period)" />
+    <arg name="pose_enabled" value="$(arg pose_enabled)" />
+    <arg name="pose_model_path" value="$(arg pose_model_path)" />
+    <arg name="pose_device" value="$(arg pose_device)" />
+    <arg name="pose_image_size" value="$(arg pose_image_size)" />
+    <arg name="pose_confidence" value="$(arg pose_confidence)" />
+    <arg name="pose_iou" value="$(arg pose_iou)" />
+    <arg name="pose_max_detections" value="$(arg pose_max_detections)" />
+    <arg name="pose_lying_torso_verticality" value="$(arg pose_lying_torso_verticality)" />
   </include>
 
   <param name="/tts/direct_playback_fallback" value="true" />
